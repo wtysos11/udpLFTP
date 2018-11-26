@@ -50,6 +50,7 @@ while serverConnected:
     transferQueue = queue.Queue()
     rec_thread = threading.Thread(target = receiver,args = (appPortNum,transferQueue,))
     send_thread = threading.Thread(target = sender,args = (appPortNum+1,transferQueue,filename,addr,))
+    appPortNum += 2
     rec_thread.start()
     send_thread.start()
     print("Thread start")
