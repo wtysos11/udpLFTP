@@ -92,13 +92,13 @@ class packetHead:
         '''接受一个压缩位流，返回包的各个信息'''
         bitStream = Hex2Bit(bitStream[:12])+bitStream[12:]
         self.dict = {}
-        self.dict["SYNvalue"] = int(bitStream[1:32],2)
-        self.dict["ACKvalue"] = int(bitStream[33:64],2)
-        self.dict["RecvWindow"] = int(bitStream[65:80],2)
+        self.dict["SYNvalue"] = int(bitStream[0:32],2)
+        self.dict["ACKvalue"] = int(bitStream[32:64],2)
+        self.dict["RecvWindow"] = int(bitStream[64:80],2)
         self.dict["FIN"] = bytes(str(bitStream[80] - 48),encoding='utf-8')
         self.dict["SYN"] = bytes(str(bitStream[81] - 48),encoding='utf-8')
         self.dict["ACK"] = bytes(str(bitStream[82] - 48),encoding='utf-8')
-        self.dict["optLength"] = int(bitStream[89:96],2)
+        self.dict["optLength"] = int(bitStream[88:96],2)
         self.dict["Options"] = bitStream[96:96+self.dict["optLength"]]
         self.dict["Data"] = bitStream[96+self.dict["optLength"]:]
 
