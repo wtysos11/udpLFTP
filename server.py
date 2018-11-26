@@ -5,8 +5,16 @@ def receiver(port,q):
     receiverSocket.bind(('127.0.0.1',port))
     while True:
         data,addr = receiverSocket.recvfrom(1024)
+        if addr[0] == '127.0.0.1' and addr[1] == port+1:
+            print(data)
+            print("Receiver receive end signal.")
+            
+            break
         print("receiver receive",data)
+        print(addr)
         q.put(data)
+
+    receiverSocket.close()
     print("receiver close")
 
 def sender(port,q,fileName,addr):
@@ -18,14 +26,15 @@ def sender(port,q,fileName,addr):
         print("sender read",data)
         if data == b'':
             print("File read end.")
-            f.close()
-            senderSocket.close()
+            senderSocket.sendto(b'file end',('127.0.0.1',port-1))
+            senderSocket.sendto(b'eof',addr)
             break
         
         senderSocket.sendto(data,addr)
         ack = q.get()
         print("sender receive ack")
-
+    senderSocket.close()
+    f.close()
     print("sender closes")
 
 
