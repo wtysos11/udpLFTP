@@ -30,15 +30,26 @@ def sender():
 def receiver():
     '''负责接受客户端发来的数据'''
 
-if __name__ == '__main__':
-    if len(sys.argv)>3:
-        operation = sys.argv[1]
-        hostaddr = sys.argv[2]
-        filename = sys.argv[3]
+
+# 主线程，默认socket，监听默认地址。对于到来的请求，进行处理，并伺机发送给sender或receiver
+mainport = 9999
+socketPortBase = 10001
 s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-s.bind(('localhost',9999))
+s.bind(('localhost',mainport))
+while True:
+    data,addr = s.recvfrom(1024)
+    #收到客户端发来的连接请求，发回将要给予的发送端口和接收端口.
+    if data == b'update':
+        s.sendto(bytes(str(socketPortBase),encoding='utf-8'),addr)
+        socketPortBase += 2
+    elif data == b'download':
+        s.sendto(bytes(str(socketPortBase),encoding='utf-8'),addr)
+        socketPortBase += 2
+    else:
+        s.sendto(b'Only support update or download',addr)
+'''
 q = Queue()
 out_thread = threading.Thread(target = output_server,args = (q,s,))
 in_thread = threading.Thread(target = receive_server, args = (q,))
 out_thread.start()
-in_thread.start()
+in_thread.start()'''
