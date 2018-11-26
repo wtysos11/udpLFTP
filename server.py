@@ -1,5 +1,5 @@
 from multiprocessing import Queue
-import os,socket,threading,time,queue
+import os,socket,threading,time,queue,sys
 
 def receive_server(q):
     base = 0
@@ -24,6 +24,17 @@ def output_server(q,s):
             print("output")
             base1 = t
 
+def sender():
+    '''负责向客户端发送数据'''
+
+def receiver():
+    '''负责接受客户端发来的数据'''
+
+if __name__ == '__main__':
+    if len(sys.argv)>3:
+        operation = sys.argv[1]
+        hostaddr = sys.argv[2]
+        filename = sys.argv[3]
 s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
 s.bind(('localhost',9999))
 q = Queue()
