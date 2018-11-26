@@ -1,55 +1,48 @@
-from multiprocessing import Queue
-import os,socket,threading,time,queue,sys
+import socket,queue,threading
 
-def receive_server(q):
-    base = 0
+def receiver(port,q):
+    receiverSocket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+    receiverSocket.bind(('127.0.0.1',port))
     while True:
-        try:
-            data = q.get(timeout = 2.0)
-            print(data)
-        except queue.Empty:
-            print("Empty")
-        t = time.time()
-        if t - base >10:
-            base = t
-            print(base)
-
-def output_server(q,s):
-    base1 = 0
-    while True:
-        data = s.recvfrom(1024)
+        data,addr = receiverSocket.recvfrom(1024)
+        print("receiver receive",data)
         q.put(data)
-        t = time.time()
-        if t - base1 > 10:
-            print("output")
-            base1 = t
+    print("receiver close")
 
-def sender():
-    '''负责向客户端发送数据'''
+def sender(port,q,fileName,addr):
+    senderSocket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+    senderSocket.bind(('127.0.0.1',port))
+    f = open(filename,"rb")
+    while True:
+        data = f.read(50)
+        print("sender read",data)
+        if data == b'':
+            print("File read end.")
+            f.close()
+            senderSocket.close()
+            break
+        
+        senderSocket.sendto(data,addr)
+        ack = q.get()
+        print("sender receive ack")
 
-def receiver():
-    '''负责接受客户端发来的数据'''
+    print("sender closes")
 
 
-# 主线程，默认socket，监听默认地址。对于到来的请求，进行处理，并伺机发送给sender或receiver
 mainport = 9999
-socketPortBase = 10001
+appPortNum = 10000
 s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-s.bind(('localhost',mainport))
-while True:
+s.bind(('127.0.0.1',mainport))
+serverConnected = True
+while serverConnected:
     data,addr = s.recvfrom(1024)
-    #收到客户端发来的连接请求，发回将要给予的发送端口和接收端口.
-    if data == b'update':
-        s.sendto(bytes(str(socketPortBase),encoding='utf-8'),addr)
-        socketPortBase += 2
-    elif data == b'download':
-        s.sendto(bytes(str(socketPortBase),encoding='utf-8'),addr)
-        socketPortBase += 2
-    else:
-        s.sendto(b'Only support update or download',addr)
-'''
-q = Queue()
-out_thread = threading.Thread(target = output_server,args = (q,s,))
-in_thread = threading.Thread(target = receive_server, args = (q,))
-out_thread.start()
-in_thread.start()'''
+    print("Main thread receive data",data)
+    filename = data.decode("utf-8")
+    transferQueue = queue.Queue()
+    rec_thread = threading.Thread(target = receiver,args = (appPortNum,transferQueue,))
+    send_thread = threading.Thread(target = sender,args = (appPortNum+1,transferQueue,filename,addr,))
+    rec_thread.start()
+    send_thread.start()
+    print("Thread start")
+
+s.close()
