@@ -1,6 +1,8 @@
 import socket,queue,threading
 from packetHead import packetHead,generateBitFromDict
 
+#经常使用的常量值
+GBNWindowMax = 1000 #GBN窗口大小，意味最多等待1000个未确认的包
 senderTimeoutValue = 1.0 #下载时发送端等待超时为1.0s
 
 # queue类q用来传递ack的值
@@ -26,8 +28,10 @@ def sender(port,q,fileName,addr):
     senderSocket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     senderSocket.bind(('127.0.0.1',port))
     f = open(filename,"rb")
-    SYNvalue = 1
+    SEQvalue = 1
     hopeACKvalue = 1
+    baseSYN = 0
+    nextseqnum = 0
     while True:
         data = f.read(50)
         print("sender read",data)
@@ -37,7 +41,7 @@ def sender(port,q,fileName,addr):
             senderSocket.sendto(generateBitFromDict({"optLength":3,"Options":b"eof","FIN":b'1'}),addr)
             break
         
-        senderSocket.sendto(generateBitFromDict({"SYNvalue":SYNvalue,"SYN":b'1',"Data":data}),addr)
+        senderSocket.sendto(generateBitFromDict({"SEQvalue":SEQvalue,"SYN":b'1',"Data":data}),addr)
         receiveCurrentACK = False
         while not receiveCurrentACK:
             try:
@@ -45,13 +49,13 @@ def sender(port,q,fileName,addr):
                 if ack == hopeACKvalue:
                     receiveCurrentACK = True
                     hopeACKvalue = int(not bool(hopeACKvalue))
-                    SYNvalue = hopeACKvalue
+                    SEQvalue = hopeACKvalue
                 else: #收到了不正确的ACK
                     print("Receive wrong ack",ack," and hope for ack",hopeACKvalue)
-                    senderSocket.sendto(generateBitFromDict({"SYNvalue":SYNvalue,"SYN":b'1',"Data":data}),addr)
+                    senderSocket.sendto(generateBitFromDict({"SEQvalue":SEQvalue,"SYN":b'1',"Data":data}),addr)
             except queue.Empty: #超时，发包
                 print("Time out")
-                senderSocket.sendto(generateBitFromDict({"SYNvalue":SYNvalue,"SYN":b'1',"Data":data}),addr)
+                senderSocket.sendto(generateBitFromDict({"SEQvalue":SEQvalue,"SYN":b'1',"Data":data}),addr)
         print("sender receive ack")
     senderSocket.close()
     f.close()

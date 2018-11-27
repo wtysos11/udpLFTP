@@ -39,8 +39,8 @@ def originBin2Hex(bStr):
 def generateBitFromDict(mydict):
     '''接受一个字典，返回二进制流'''
     bitStream = b''
-    if "SYNvalue" in mydict:
-        bitStream += int2Bit(mydict["SYNvalue"],32)
+    if "SEQvalue" in mydict:
+        bitStream += int2Bit(mydict["SEQvalue"],32)
     else:
         bitStream += int2Bit(0,32)
     
@@ -92,7 +92,7 @@ class packetHead:
         '''接受一个压缩位流，返回包的各个信息'''
         bitStream = Hex2Bit(bitStream[:12])+bitStream[12:]
         self.dict = {}
-        self.dict["SYNvalue"] = int(bitStream[0:32],2)
+        self.dict["SEQvalue"] = int(bitStream[0:32],2)
         self.dict["ACKvalue"] = int(bitStream[32:64],2)
         self.dict["RecvWindow"] = int(bitStream[64:80],2)
         self.dict["optLength"] = int(bitStream[88:96],2)
