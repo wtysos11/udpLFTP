@@ -6,10 +6,16 @@ s.bind(('127.0.0.1',9990))
 s.sendto(generateBitFromDict({"optLength":8,"Options":b"test.txt"}),('127.0.0.1',9999))
 ackValue = 1
 hopeSYNvalue = 1
+drop = 0
 while True:
     data,addr = s.recvfrom(1024)
     packet = packetHead(data)
     print(packet.dict["Data"],addr)
+    drop = int(not bool(drop))
+    if drop == 1:
+        print("Drop packet")
+        continue
+
     if packet.dict["FIN"] == b'1':
         print("receive eof, client over.")
         break
