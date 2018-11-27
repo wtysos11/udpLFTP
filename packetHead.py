@@ -36,7 +36,7 @@ def originBin2Hex(bStr):
         point += 8
     return result
 
-def generateHead(mydict):
+def generateBitFromDict(mydict):
     '''接受一个字典，返回二进制流'''
     bitStream = b''
     if "SYNvalue" in mydict:
@@ -108,4 +108,4 @@ def DefaultPackWithOptionsStr(optStr):
     optStr = bytes(optStr,encoding='utf-8')
     d["optLength"] = len(optStr)
     d["Options"] = optStr
-    return packetHead(generateHead(d))
+    return packetHead(generateBitFromDict(d))

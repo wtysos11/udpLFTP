@@ -1,5 +1,5 @@
 import socket,queue,threading
-
+from packetHead import *
 def receiver(port,q):
     receiverSocket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     receiverSocket.bind(('127.0.0.1',port))
@@ -8,9 +8,10 @@ def receiver(port,q):
         if addr[0] == '127.0.0.1' and addr[1] == port+1:
             print(data)
             print("Receiver receive end signal.")
-            
             break
-        print("receiver receive",data)
+
+        packet = packetHead(data)
+        print("receiver receive",packet.dict["ACK"])
         print(addr)
         q.put(data)
 
@@ -26,11 +27,11 @@ def sender(port,q,fileName,addr):
         print("sender read",data)
         if data == b'':
             print("File read end.")
-            senderSocket.sendto(b'file end',('127.0.0.1',port-1))
-            senderSocket.sendto(b'eof',addr)
+            senderSocket.sendto(generateBitFromDict({"optLength":3,"Options":b"end","FIN":b'1'}),('127.0.0.1',port-1))
+            senderSocket.sendto(generateBitFromDict({"optLength":3,"Options":b"eof","FIN":b'1'}),addr)
             break
         
-        senderSocket.sendto(data,addr)
+        senderSocket.sendto(generateBitFromDict({"Data":data}),addr)
         ack = q.get()
         print("sender receive ack")
     senderSocket.close()
@@ -46,7 +47,8 @@ serverConnected = True
 while serverConnected:
     data,addr = s.recvfrom(1024)
     print("Main thread receive data",data)
-    filename = data.decode("utf-8")
+    packet = packetHead(data)
+    filename = packet.dict["Options"].decode("utf-8")
     transferQueue = queue.Queue()
     rec_thread = threading.Thread(target = receiver,args = (appPortNum,transferQueue,))
     send_thread = threading.Thread(target = sender,args = (appPortNum+1,transferQueue,filename,addr,))
