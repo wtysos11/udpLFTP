@@ -1,5 +1,9 @@
 import socket,queue,threading
-from packetHead import *
+from packetHead import packetHead,generateBitFromDict
+
+senderTimeoutValue = 1.0 #下载时发送端等待超时为1.0s
+
+# queue类q用来传递ack的值
 def receiver(port,q):
     receiverSocket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     receiverSocket.bind(('127.0.0.1',port))
@@ -11,9 +15,9 @@ def receiver(port,q):
             break
 
         packet = packetHead(data)
-        print("receiver receive",packet.dict["ACK"])
+        print("receiver receive",packet.dict["ACKvalue"])
         print(addr)
-        q.put(data)
+        q.put(packet.dict["ACKvalue"])
 
     receiverSocket.close()
     print("receiver close")
@@ -22,6 +26,8 @@ def sender(port,q,fileName,addr):
     senderSocket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     senderSocket.bind(('127.0.0.1',port))
     f = open(filename,"rb")
+    SYNvalue = 1
+    hopeACKvalue = 1
     while True:
         data = f.read(50)
         print("sender read",data)
@@ -31,8 +37,21 @@ def sender(port,q,fileName,addr):
             senderSocket.sendto(generateBitFromDict({"optLength":3,"Options":b"eof","FIN":b'1'}),addr)
             break
         
-        senderSocket.sendto(generateBitFromDict({"Data":data}),addr)
-        ack = q.get()
+        senderSocket.sendto(generateBitFromDict({"SYNvalue":SYNvalue,"SYN":b'1',"Data":data}),addr)
+        receiveCurrentACK = False
+        while not receiveCurrentACK:
+            try:
+                ack = q.get(timeout = senderTimeoutValue)
+                if ack == hopeACKvalue:
+                    receiveCurrentACK = True
+                    hopeACKvalue = int(not bool(hopeACKvalue))
+                    SYNvalue = hopeACKvalue
+                else: #收到了不正确的ACK
+                    print("Receive wrong ack",ack," and hope for ack",hopeACKvalue)
+                    senderSocket.sendto(generateBitFromDict({"SYNvalue":SYNvalue,"SYN":b'1',"Data":data}),addr)
+            except queue.Empty: #超时，发包
+                print("Time out")
+                senderSocket.sendto(generateBitFromDict({"SYNvalue":SYNvalue,"SYN":b'1',"Data":data}),addr)
         print("sender receive ack")
     senderSocket.close()
     f.close()
