@@ -15,11 +15,14 @@ receiveServerReceiverPort = False
 while not receiveServerReceiverPort:
     data,addr = s.recvfrom(FileReceivePackMax)
     packet = packetHead(data)
-    jsonOptions = json.loads(packet.dict["Options"].decode("utf-8"))
-    if "serverReceiverPort" in jsonOptions:
-        serverReceiverPort = jsonOptions["serverReceiverPort"]
-        cacheMax = packet.dict["RecvWindow"]
-        receiveServerReceiverPort = True
+    try:
+        jsonOptions = json.loads(packet.dict["Options"].decode("utf-8"))
+        if "serverReceiverPort" in jsonOptions:
+            serverReceiverPort = jsonOptions["serverReceiverPort"]
+            cacheMax = packet.dict["RecvWindow"]
+            receiveServerReceiverPort = True
+    except:#如果接受到空包的话，loads会抛出异常
+        pass
 
 if operation == "download":
     receiver_thread = threading.Thread(target = fileReceiver,args = (appPortNum,(destUrl,serverReceiverPort),))
