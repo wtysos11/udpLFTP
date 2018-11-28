@@ -28,7 +28,7 @@ while not receiveServerReceiverPort:
         pass
 
 if operation == "download":
-    receiver_thread = threading.Thread(target = fileReceiver,args = (appPortNum,(destUrl,serverReceiverPort),))
+    receiver_thread = threading.Thread(target = fileReceiver,args = (appPortNum,(destUrl,serverReceiverPort),filename))
     receiver_thread.start()
     receiver_thread.join()
 elif operation == "upload":

@@ -36,7 +36,7 @@ while serverConnected:
         rec_thread.start()
         send_thread.start()
     elif operation == "upload":      
-        rec_thread = threading.Thread(target = fileReceiver , args = (appPortNum,(addr[0],receiverPort)),)
+        rec_thread = threading.Thread(target = fileReceiver , args = (appPortNum,(addr[0],receiverPort),filename,))
         rec_thread.start()
     print("Thread start")
 

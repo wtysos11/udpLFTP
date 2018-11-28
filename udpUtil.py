@@ -178,9 +178,13 @@ def TransferSender(port,q,fileName,addr,cacheMax):
     # 如果反复收到ACK = 0
     while not receiveFIN:
         try:
-            ack = q.get(timeout = senderTimeoutValue)
+            data = q.get(timeout = senderTimeoutValue)
+            packet = packetHead(data)
+            ack = packet.dict["ACKvalue"]
             print("Sender try to close but receive unproper ack:",ack)
-            if ack == nextseqnum or ack == 0:
+            if ack == nextseqnum:
+                receiveFIN = True
+            elif ack == 0:
                 counter+=1
                 if counter >= 3:
                     counter = 0
@@ -201,7 +205,7 @@ def TransferSender(port,q,fileName,addr,cacheMax):
 FileReceivePackMax = config.FileReceivePackMax
 FileReceivePackNumMax = config.FileReceivePackNumMax
 
-def fileReceiver(port,serverReceiverAddr):
+def fileReceiver(port,serverReceiverAddr,filename):
     '''
     GBN接受方逻辑
     不断收包
@@ -211,24 +215,26 @@ def fileReceiver(port,serverReceiverAddr):
     expectedSeqValue = 1
     s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     s.bind(('127.0.0.1',port))
-    while True:
-        data,addr = s.recvfrom(FileReceivePackMax)
-        packet = packetHead(data)
-        #print("receive ",packet.dict["Data"]," with seq",packet.dict["SEQvalue"])
-        #随机丢包
-        '''
-        if random.random()>0.8:
-            #print("Drop packet")
-            continue
-        '''
-        if packet.dict["FIN"] == b'1':#如果收到FIN包，则退出
-            print("receive eof, client over.")
-            break
-        elif packet.dict["SEQvalue"] == expectedSeqValue:
-            print("Output data:",packet.dict["Data"])
-            s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":FileReceivePackMax*FileReceivePackNumMax}),serverReceiverAddr)
-            expectedSeqValue += 1
-        else:#收到了不对的包
-            #print("Wrong data.",expectedSeqValue)
-            s.sendto(generateBitFromDict({"ACKvalue":0,"ACK":b'1',"RecvWindow":FileReceivePackMax*FileReceivePackNumMax}),serverReceiverAddr)
-    #s.sendto(generateBitFromDict({"FIN":b'1'}),('127.0.0.1',9999))
+    with open(filename,"ab+") as f:
+        while True:
+            data,addr = s.recvfrom(FileReceivePackMax)
+            packet = packetHead(data)
+            #print("receive ",packet.dict["Data"]," with seq",packet.dict["SEQvalue"])
+            #随机丢包
+            '''
+            if random.random()>0.8:
+                #print("Drop packet")
+                continue
+            '''
+            if packet.dict["FIN"] == b'1':#如果收到FIN包，则退出
+                print("receive eof, client over.")
+                s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":FileReceivePackMax*FileReceivePackNumMax}),serverReceiverAddr)
+                break
+            elif packet.dict["SEQvalue"] == expectedSeqValue:
+                f.write(packet.dict["Data"])
+                s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":FileReceivePackMax*FileReceivePackNumMax}),serverReceiverAddr)
+                expectedSeqValue += 1
+            else:#收到了不对的包
+                #print("Wrong data.",expectedSeqValue)
+                s.sendto(generateBitFromDict({"ACKvalue":0,"ACK":b'1',"RecvWindow":FileReceivePackMax*FileReceivePackNumMax}),serverReceiverAddr)
+        #s.sendto(generateBitFromDict({"FIN":b'1'}),('127.0.0.1',9999))#关闭服务器，调试用
