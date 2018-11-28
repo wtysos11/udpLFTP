@@ -16,9 +16,9 @@ GBN接受方逻辑
 while True:
     data,addr = s.recvfrom(clientReceivePackMax)
     packet = packetHead(data)
-    print("receive ",packet.dict["Data"]," with seq",packet.dict["SEQvalue"])
+    #print("receive ",packet.dict["Data"]," with seq",packet.dict["SEQvalue"])
     if random.random()>0.8:
-        print("Drop packet")
+        #print("Drop packet")
         continue
 
     if packet.dict["FIN"] == b'1':#如果收到FIN包，则退出
@@ -29,6 +29,6 @@ while True:
         s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1'}),('127.0.0.1',int(addr[1])-1))
         expectedSeqValue += 1
     else:#收到了不对的包
-        print("Wrong data.",expectedSeqValue)
+        #print("Wrong data.",expectedSeqValue)
         s.sendto(generateBitFromDict({"ACKvalue":0,"ACK":b'1'}),('127.0.0.1',int(addr[1])-1))
 #s.sendto(generateBitFromDict({"FIN":b'1'}),('127.0.0.1',9999))

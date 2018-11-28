@@ -2,7 +2,7 @@ import socket,queue,threading,time
 from packetHead import packetHead,generateBitFromDict
 
 #经常使用的常量值
-GBNWindowMax = 1000 #GBN窗口大小，意味最多等待1000个未确认的包
+GBNWindowMax = 5 #GBN窗口大小，意味最多等待1000个未确认的包
 senderTimeoutValue = 1.0 #下载时发送端等待超时为1.0s
 senderPacketDataSize = 50 #从文件中读取的数据的大小，发送包中数据的大小。
 
