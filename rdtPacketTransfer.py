@@ -1,13 +1,12 @@
 import queue,threading
 from packetHead import packetHead,generateBitFromDict
-from udpUtil import FileReceivePackMax,senderTimeoutValue
-
+import config
 
 def rdt_listener(s,q,expectedACK):
     '''监听端口，检查是否有ACK，如果有，则放入队列中'''
     receivePacket = False
     while not receivePacket:
-        data,addr = s.recvfrom(FileReceivePackMax)
+        data,addr = s.recvfrom(config.FileReceivePackMax)
         packet = packetHead(data)
         if packet.dict["ACKvalue"] == expectedACK:
             q.put(expectedACK)
@@ -31,13 +30,15 @@ def rdt_send(s,addr,bitStream,expectedACK):
     counter = 1
     while not ackGet:
         try:
-            ack = q.get(timeout = senderTimeoutValue)
+            ack = q.get(timeout = config.senderTimeoutValue)
             if ack == expectedACK:
                 ackGet = True
         except queue.Empty:
+            print("RDT time out.")
             counter += 1
             if counter > 5:
                 s.sendto(generateBitFromDict({"ACK":b'1',"ACKvalue":expectedACK}),s.getsockname())
-                raise Exception("Network Error in rdt_send.")
+                #raise Exception("Network Error in rdt_send.")
+                break
             s.sendto(bitStream,addr)
 

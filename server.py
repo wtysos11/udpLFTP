@@ -1,6 +1,7 @@
 import socket,queue,threading,time,json
 from packetHead import packetHead,generateBitFromDict
 from udpUtil import *
+from rdtPacketTransfer import rdt_send
 
 
 mainport = 9999
@@ -14,6 +15,8 @@ while serverConnected:
     packet = packetHead(data)
     if packet.dict["FIN"] == b'1':
         break
+    elif packet.dict["SEQvalue"]>0:
+        s.sendto(generateBitFromDict({"ACK":b'1',"ACKvalue":packet.dict["SEQvalue"]}),addr)
     
     jsonOptions = packet.dict["Options"].decode("utf-8")
     jsonOptions = json.loads(jsonOptions)
@@ -23,7 +26,7 @@ while serverConnected:
     receiverPort = jsonOptions["ReceiverPort"]
     print("Main thread receive filename: ",filename," with operation ",operation)
     backJson = bytes(json.dumps({"serverReceiverPort":appPortNum}),encoding = 'utf-8')
-    s.sendto(generateBitFromDict({"optLength":len(backJson),"Options":backJson,"RecvWindow":FileReceivePackNumMax*FileReceivePackMax}),addr)
+    rdt_send(s,addr,generateBitFromDict({"SEQvalue":2,"optLength":len(backJson),"Options":backJson,"RecvWindow":FileReceivePackNumMax*FileReceivePackMax}),2)
 
     if operation == "download":
         transferQueue = queue.Queue()

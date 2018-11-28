@@ -1,12 +1,23 @@
 import socket,queue,time,json,random
 from packetHead import packetHead,generateBitFromDict
-#经常使用的常量值
-GBNWindowMax = 5 #GBN窗口大小，意味最多等待1000个未确认的包
-senderTimeoutValue = 1.0 #下载时发送端等待超时为1.0s
-TransferSenderPacketDataSize = 50 #从文件中读取的数据的大小，发送包中数据的大小。
+from rdtPacketTransfer import rdt_send
 
-blockWindow = 1 #阻塞窗口初始值
-ssthresh = 10 #拥塞避免值
+import config
+#声明全局变量
+config.GBNWindowMax = 5 #GBN窗口大小，意味最多等待1000个未确认的包
+config.senderTimeoutValue = 1.0 #下载时发送端等待超时为1.0s
+config.TransferSenderPacketDataSize = 50 #从文件中读取的数据的大小，发送包中数据的大小。
+config.blockWindow = 1 #阻塞窗口初始值
+config.ssthresh = 10 #拥塞避免阈值
+config.FileReceivePackMax = 1024 #客户端接受数据包的长度最大为1024bytes
+config.FileReceivePackNumMax = 50 #最多能够接受50个这样的数据包
+#经常使用的常量值
+GBNWindowMax = config.GBNWindowMax
+senderTimeoutValue = config.senderTimeoutValue
+TransferSenderPacketDataSize = config.TransferSenderPacketDataSize
+
+blockWindow = config.blockWindow
+ssthresh = config.ssthresh
 
 ### GBN接收方逻辑
 # queue类q用来传递ack的值
@@ -16,8 +27,7 @@ def TransferReceiver(port,q):
     while True:
         data,addr = receiverSocket.recvfrom(1024)
         if addr[0] == '127.0.0.1' and addr[1] == port+1:
-            print(data)
-            print("Receiver receive end signal.")
+            print("Receiver receive end signal from local.")
             break
 
         packet = packetHead(data)
@@ -27,17 +37,18 @@ def TransferReceiver(port,q):
     receiverSocket.close()
     print("receiver close")
 
-'''
-GBN发送方逻辑
-尝试从文件中读取数据
-    是否能够进行发送
-        如果当前发送的包没有超过数量或是阻塞控制上限，则打包、缓存，并进行发送。
-        如果已经满了，则置sendValuable = False
-    发送完之后，检查是否接受到ACK并判断超时。
-    对于接受到的ACK，baseSEQ进行更新。
-    如果baseSEQ = nextseqnum，则解除置位,sendValuable = True
-'''
+
 def TransferSender(port,q,fileName,addr,cacheMax):
+    '''
+    GBN发送方逻辑
+    尝试从文件中读取数据
+        是否能够进行发送
+            如果当前发送的包没有超过数量或是阻塞控制上限，则打包、缓存，并进行发送。
+            如果已经满了，则置sendValuable = False
+        发送完之后，检查是否接受到ACK并判断超时。
+        对于接受到的ACK，baseSEQ进行更新。
+        如果baseSEQ = nextseqnum，则解除置位,sendValuable = True
+    '''
     global blockWindow,ssthresh
     print("Enter sender with filename",fileName)
     senderSocket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -145,7 +156,7 @@ def TransferSender(port,q,fileName,addr,cacheMax):
                     blockWindow = 1
                 elif currentTime - GBNtimer > senderTimeoutValue and ClientBlock:
                     GBNtimer = time.time()
-                    senderSocket.sendto(generateBitFromDict({}),addr)
+                    senderSocket.sendto(generateBitFromDict({}),addr)#向目标发送空包以更新recvWindow
             except queue.Empty: #超时，发包
                 if not ClientBlock:
                     print("Time out and output from",baseSEQ)
@@ -187,15 +198,16 @@ def TransferSender(port,q,fileName,addr,cacheMax):
 
 
 #文件接收方
-FileReceivePackMax = 1024 #客户端接受数据包的长度最大为1024bytes
-FileReceivePackNumMax = 50 #最多能够接受50个这样的数据包
-'''
-GBN接受方逻辑
-不断收包
-    如果收到的包符合expectedSeqValue，输出，并expectedSeqValue += 1
-返回ACK expectedSeqValue
-'''
+FileReceivePackMax = config.FileReceivePackMax
+FileReceivePackNumMax = config.FileReceivePackNumMax
+
 def fileReceiver(port,serverReceiverAddr):
+    '''
+    GBN接受方逻辑
+    不断收包
+        如果收到的包符合expectedSeqValue，输出，并expectedSeqValue += 1
+    返回ACK expectedSeqValue
+    '''
     expectedSeqValue = 1
     s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     s.bind(('127.0.0.1',port))
