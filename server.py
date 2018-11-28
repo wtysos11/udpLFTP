@@ -85,6 +85,7 @@ def sender(port,q,fileName,addr):
                 elif ack == 0:
                     counter += 1
                     if counter >=3:
+                        counter = 0
                         raise queue.Empty
                     continue
 
@@ -103,6 +104,25 @@ def sender(port,q,fileName,addr):
         print("sender receive ack")
     #关闭接受端与客户端
     senderSocket.sendto(generateBitFromDict({"optLength":3,"Options":b"eof","FIN":b'1'}),addr)
+    receiveFIN = False
+    counter = 0
+    overCount = 0
+    # 如果反复收到ACK = 0
+    while not receiveFIN:
+        try:
+            ack = q.get(timeout = senderTimeoutValue)
+            print("Sender try to close but receive unproper ack:",ack)
+            if ack == nextseqnum or ack == 0:
+                counter+=1
+                if counter >= 3:
+                    counter = 0
+                    raise queue.Empty
+        except queue.Empty:
+            print("Sender resend FIN")
+            overCount += 1
+            if overCount > 5:
+                break
+            senderSocket.sendto(generateBitFromDict({"optLength":3,"Options":b"eof","FIN":b'1'}),addr)
     senderSocket.sendto(generateBitFromDict({"optLength":3,"Options":b"end","FIN":b'1'}),('127.0.0.1',port-1))
     senderSocket.close()
     f.close()
