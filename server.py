@@ -21,6 +21,9 @@ while serverConnected:
     operation = jsonOptions["operation"]
     cacheMax = packet.dict["RecvWindow"]
     print("Main thread receive filename: ",filename)
+    backJson = bytes(json.dumps({"serverReceiverPort":appPortNum}),encoding = 'utf-8')
+    s.sendto(generateBitFromDict({"optLength":len(backJson),"Options":backJson}),addr)
+
     transferQueue = queue.Queue()
     rec_thread = threading.Thread(target = TransferReceiver,args = (appPortNum,transferQueue,))
     send_thread = threading.Thread(target = TransferSender,args = (appPortNum+1,transferQueue,filename,addr,cacheMax,))
