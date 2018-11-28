@@ -4,7 +4,7 @@ from packetHead import packetHead,generateBitFromDict
 #经常使用的常量值
 GBNWindowMax = 5 #GBN窗口大小，意味最多等待1000个未确认的包
 senderTimeoutValue = 1.0 #下载时发送端等待超时为1.0s
-senderPacketDataSize = 50 #从文件中读取的数据的大小，发送包中数据的大小。
+TransferSenderPacketDataSize = 50 #从文件中读取的数据的大小，发送包中数据的大小。
 
 blockWindow = 1 #阻塞窗口初始值
 ssthresh = 10 #拥塞避免值
@@ -65,7 +65,7 @@ def TransferSender(port,q,fileName,addr,cacheMax):
     while not senderClose:
         while sendValueable:#如果可以读入数据
 
-            data = f.read(senderPacketDataSize)
+            data = f.read(TransferSenderPacketDataSize)
             print("sender read file with data: ",data)
             if data == b'':#文件读入完毕
                 print("File read end.")
@@ -78,7 +78,7 @@ def TransferSender(port,q,fileName,addr,cacheMax):
             senderSocket.sendto(GBNcache[nextseqnum],addr)
             print("Sender send",data)
             nextseqnum += 1
-            senderSendDataSize = senderPacketDataSize * (nextseqnum - baseSEQ)
+            senderSendDataSize = TransferSenderPacketDataSize * (nextseqnum - baseSEQ)
             if nextseqnum - baseSEQ >=GBNWindowMax or nextseqnum - baseSEQ >= blockWindow:
                 sendValueable = False
                 print("Up to limit ",nextseqnum - baseSEQ,GBNWindowMax,blockWindow)
