@@ -9,8 +9,9 @@ senderPacketDataSize = 50 #从文件中读取的数据的大小，发送包中�
 blockWindow = 1 #阻塞窗口初始值
 ssthresh = 10 #拥塞避免值
 
+### GBN接收方逻辑
 # queue类q用来传递ack的值
-def receiver(port,q):
+def TransferReceiver(port,q):
     receiverSocket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     receiverSocket.bind(('127.0.0.1',port))
     while True:
@@ -22,7 +23,7 @@ def receiver(port,q):
 
         packet = packetHead(data)
         print("receiver receive ack:",packet.dict["ACKvalue"])
-        q.put(packet.dict["ACKvalue"])
+        q.put(data)
 
     receiverSocket.close()
     print("receiver close")
@@ -37,7 +38,7 @@ GBN发送方逻辑
     对于接受到的ACK，baseSEQ进行更新。
     如果baseSEQ = nextseqnum，则解除置位,sendValuable = True
 '''
-def sender(port,q,fileName,addr):
+def TransferSender(port,q,fileName,addr,cacheMax):
     global blockWindow,ssthresh
     print("Enter sender with filename",fileName)
     senderSocket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -51,16 +52,21 @@ def sender(port,q,fileName,addr):
     sendValueable = True
     senderClose = False
     sendOver = False
+    ClientBlock = False
     blockStatus = 1#1意味着处于指数增长；2意味着线性增长
+
+    senderSendDataSize = 0 #记录当前已经发送的数据量，这个量不能超过对面缓存区的大小
     #拥塞控制相关：
     # 正常情况下，发送端收到ACK后双倍发送（拥塞窗口倍增）
     # 如果超时，拥塞窗口变为1，并开始线性增长。更新ssthresh = 当前拥塞窗口的一半
     # 如果收到3个ACK，拥塞窗口等于阈值ssthresh，然后开始线性增长
+    #流控制相关：
+    #如果客户端上传的数据包超过对面的缓存区，则说明对面缓存区已经满了。这时候，将会暂停发送和重传直到缓存区再次清空
     while not senderClose:
         while sendValueable:#如果可以读入数据
+
             data = f.read(senderPacketDataSize)
             print("sender read file with data: ",data)
-            data = f.read(senderPacketDataSize)
             if data == b'':#文件读入完毕
                 print("File read end.")
                 sendValueable = False
@@ -72,19 +78,35 @@ def sender(port,q,fileName,addr):
             senderSocket.sendto(GBNcache[nextseqnum],addr)
             print("Sender send",data)
             nextseqnum += 1
+            senderSendDataSize = senderPacketDataSize * (nextseqnum - baseSEQ)
             if nextseqnum - baseSEQ >=GBNWindowMax or nextseqnum - baseSEQ >= blockWindow:
                 sendValueable = False
                 print("Up to limit ",nextseqnum - baseSEQ,GBNWindowMax,blockWindow)
+            elif senderSendDataSize > cacheMax:
+                sendValueable = False
+                ClientBlock = True
+                print("Client cache full.")
 
         #等待接收ACK
         receiveACK = False
         counter = 0
         while not receiveACK:
             try:
-                ack = q.get(timeout = senderTimeoutValue)
+                receiveData = q.get(timeout = senderTimeoutValue)
+                receivePacket = packetHead(receiveData)
+
+                ack = receivePacket.dict["ACKvalue"]
+                cacheMax = receivePacket.dict["RecvWindow"]
+
+                if senderSendDataSize <= cacheMax:
+                    ClientBlock = False
+                else:
+                    ClientBlock = True
+                
                 if ack >= baseSEQ:
                     print("update baseSEQ to ",ack+1," with nextseqnum",nextseqnum)
                     baseSEQ = ack+1
+                    senderSendDataSize = (nextseqnum-baseSEQ)*senderSendDataSize#更新流控制未确定名单
                     receiveACK = True #收到ACK，脱离超时循环
                     GBNtimer = time.time()#更新计时器
                     if baseSEQ == nextseqnum:#前一阶段发送完毕
@@ -114,7 +136,7 @@ def sender(port,q,fileName,addr):
 
 
                 currentTime = time.time()
-                if currentTime - GBNtimer > senderTimeoutValue:
+                if currentTime - GBNtimer > senderTimeoutValue and not ClientBlock:
                     print("Time out and output from",baseSEQ)
                     GBNtimer = time.time()#更新计时器
                     for i in range(baseSEQ,nextseqnum):
@@ -122,14 +144,21 @@ def sender(port,q,fileName,addr):
                     blockStatus = 2
                     ssthresh = int(blockWindow)/2
                     blockWindow = 1
+                elif currentTime - GBNtimer > senderTimeoutValue and ClientBlock:
+                    GBNtimer = time.time()
+                    senderSocket.sendto(generateBitFromDict({}),addr)
             except queue.Empty: #超时，发包
-                print("Time out and output from",baseSEQ)
-                GBNtimer = time.time()#更新计时器
-                for i in range(baseSEQ,nextseqnum):
-                    senderSocket.sendto(GBNcache[i],addr)
-                blockStatus = 2
-                ssthresh = int(blockWindow)/2
-                blockWindow = 1
+                if not ClientBlock:
+                    print("Time out and output from",baseSEQ)
+                    GBNtimer = time.time()#更新计时器
+                    for i in range(baseSEQ,nextseqnum):
+                        senderSocket.sendto(GBNcache[i],addr)
+                    blockStatus = 2
+                    ssthresh = int(blockWindow)/2
+                    blockWindow = 1
+                else:
+                    GBNtimer = time.time()
+                    senderSocket.sendto(generateBitFromDict({}),addr)
         print("sender receive ack")
     #关闭接受端与客户端
     senderSocket.sendto(generateBitFromDict({"optLength":3,"Options":b"eof","FIN":b'1'}),addr)
@@ -174,10 +203,11 @@ while serverConnected:
     jsonOptions = json.loads(jsonOptions)
     filename = jsonOptions["filename"]
     operation = jsonOptions["operation"]
+    cacheMax = packet.dict["RecvWindow"]
     print("Main thread receive filename: ",filename)
     transferQueue = queue.Queue()
-    rec_thread = threading.Thread(target = receiver,args = (appPortNum,transferQueue,))
-    send_thread = threading.Thread(target = sender,args = (appPortNum+1,transferQueue,filename,addr,))
+    rec_thread = threading.Thread(target = TransferReceiver,args = (appPortNum,transferQueue,))
+    send_thread = threading.Thread(target = TransferSender,args = (appPortNum+1,transferQueue,filename,addr,cacheMax,))
     appPortNum += 2
     rec_thread.start()
     send_thread.start()
