@@ -18,8 +18,7 @@ def receiver(port,q):
             break
 
         packet = packetHead(data)
-        print("receiver receive",packet.dict["ACKvalue"])
-        print(addr)
+        print("receiver receive ack:",packet.dict["ACKvalue"])
         q.put(packet.dict["ACKvalue"])
 
     receiverSocket.close()
@@ -41,12 +40,13 @@ def sender(port,q,fileName,addr):
     senderSocket.bind(('127.0.0.1',port))
     f = open(filename,"rb")
     #待确认的包的数量nextseqnum - baseSEQ <= GBNWindowMax
-    baseSEQ = 0
-    nextseqnum = 0
+    baseSEQ = 1
+    nextseqnum = 1
     GBNtimer = 0
     GBNcache = {}
     sendValueable = True
     senderClose = False
+    sendOver = False
     while not senderClose:
         while sendValueable:#如果可以读入数据
             data = f.read(senderPacketDataSize)
@@ -55,7 +55,7 @@ def sender(port,q,fileName,addr):
             if data == b'':#文件读入完毕
                 print("File read end.")
                 sendValueable = False
-                senderClose = True
+                sendOver = True
             #缓存并发送
             if nextseqnum == baseSEQ:
                 GBNtimer = time.time()
@@ -68,24 +68,35 @@ def sender(port,q,fileName,addr):
 
         #等待接收ACK
         receiveACK = False
+        counter = 0
         while not receiveACK:
             try:
                 ack = q.get(timeout = senderTimeoutValue)
                 if ack >= baseSEQ:
+                    print("update baseSEQ to ",ack+1," with nextseqnum",nextseqnum)
                     baseSEQ = ack+1
                     receiveACK = True #收到ACK，脱离超时循环
                     GBNtimer = time.time()#更新计时器
                     if baseSEQ == nextseqnum:#前一阶段发送完毕
                         sendValueable = True
+                        if sendOver:
+                            senderClose = True
                         break
-                    
+                elif ack == 0:
+                    counter += 1
+                    if counter >=3:
+                        raise queue.Empty
+                    continue
+
+
                 currentTime = time.time()
                 if currentTime - GBNtimer > senderTimeoutValue:
+                    print("Time out and output from",baseSEQ)
                     GBNtimer = time.time()#更新计时器
                     for i in range(baseSEQ,nextseqnum):
                         senderSocket.sendto(GBNcache[i],addr)
             except queue.Empty: #超时，发包
-                print("Time out")
+                print("Time out and output from",baseSEQ)
                 GBNtimer = time.time()#更新计时器
                 for i in range(baseSEQ,nextseqnum):
                     senderSocket.sendto(GBNcache[i],addr)
@@ -107,6 +118,8 @@ while serverConnected:
     data,addr = s.recvfrom(1024)
     print("Main thread receive data",data)
     packet = packetHead(data)
+    if packet.dict["FIN"] == b'1':
+        break
     filename = packet.dict["Options"].decode("utf-8")
     print("Main thread receive filename: ",filename)
     transferQueue = queue.Queue()
