@@ -1,4 +1,4 @@
-import socket,queue,threading,time
+import socket,queue,threading,time,json
 from packetHead import packetHead,generateBitFromDict
 
 #经常使用的常量值
@@ -169,7 +169,11 @@ while serverConnected:
     packet = packetHead(data)
     if packet.dict["FIN"] == b'1':
         break
-    filename = packet.dict["Options"].decode("utf-8")
+    
+    jsonOptions = packet.dict["Options"].decode("utf-8")
+    jsonOptions = json.loads(jsonOptions)
+    filename = jsonOptions["filename"]
+    operation = jsonOptions["operation"]
     print("Main thread receive filename: ",filename)
     transferQueue = queue.Queue()
     rec_thread = threading.Thread(target = receiver,args = (appPortNum,transferQueue,))
