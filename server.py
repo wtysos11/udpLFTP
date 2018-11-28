@@ -6,6 +6,9 @@ GBNWindowMax = 5 #GBN窗口大小，意味最多等待1000个未确认的包
 senderTimeoutValue = 1.0 #下载时发送端等待超时为1.0s
 senderPacketDataSize = 50 #从文件中读取的数据的大小，发送包中数据的大小。
 
+blockWindow = 1 #阻塞窗口初始值
+ssthresh = 10 #拥塞避免值
+
 # queue类q用来传递ack的值
 def receiver(port,q):
     receiverSocket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -35,6 +38,7 @@ GBN发送方逻辑
     如果baseSEQ = nextseqnum，则解除置位,sendValuable = True
 '''
 def sender(port,q,fileName,addr):
+    global blockWindow,ssthresh
     print("Enter sender with filename",fileName)
     senderSocket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     senderSocket.bind(('127.0.0.1',port))
@@ -47,6 +51,11 @@ def sender(port,q,fileName,addr):
     sendValueable = True
     senderClose = False
     sendOver = False
+    blockStatus = 1#1意味着处于指数增长；2意味着线性增长
+    #拥塞控制相关：
+    # 正常情况下，发送端收到ACK后双倍发送（拥塞窗口倍增）
+    # 如果超时，拥塞窗口变为1，并开始线性增长。更新ssthresh = 当前拥塞窗口的一半
+    # 如果收到3个ACK，拥塞窗口等于阈值ssthresh，然后开始线性增长
     while not senderClose:
         while sendValueable:#如果可以读入数据
             data = f.read(senderPacketDataSize)
@@ -63,8 +72,9 @@ def sender(port,q,fileName,addr):
             senderSocket.sendto(GBNcache[nextseqnum],addr)
             print("Sender send",data)
             nextseqnum += 1
-            if nextseqnum - baseSEQ >=GBNWindowMax:
+            if nextseqnum - baseSEQ >=GBNWindowMax or nextseqnum - baseSEQ >= blockWindow:
                 sendValueable = False
+                print("Up to limit ",nextseqnum - baseSEQ,GBNWindowMax,blockWindow)
 
         #等待接收ACK
         receiveACK = False
@@ -79,13 +89,26 @@ def sender(port,q,fileName,addr):
                     GBNtimer = time.time()#更新计时器
                     if baseSEQ == nextseqnum:#前一阶段发送完毕
                         sendValueable = True
+                        if blockStatus == 1:
+                            blockWindow *= 2
+                        else:
+                            blockWindow += 1
+                        #阻塞避免，如果达到阈值，则状态转换
+                        if blockWindow > ssthresh and blockStatus == 1:
+                            blockWindow = ssthresh
+                            blockStatus = 2
                         if sendOver:
                             senderClose = True
                         break
                 elif ack == 0:
                     counter += 1
-                    if counter >=3:
+                    if counter >=3:#收到三次重复的ACK
                         counter = 0
+                        if blockWindow>ssthresh:
+                            blockWindow = ssthresh
+                        else:
+                            ssthresh = blockWindow
+                        blockStatus = 2
                         raise queue.Empty
                     continue
 
@@ -96,11 +119,17 @@ def sender(port,q,fileName,addr):
                     GBNtimer = time.time()#更新计时器
                     for i in range(baseSEQ,nextseqnum):
                         senderSocket.sendto(GBNcache[i],addr)
+                    blockStatus = 2
+                    ssthresh = int(blockWindow)/2
+                    blockWindow = 1
             except queue.Empty: #超时，发包
                 print("Time out and output from",baseSEQ)
                 GBNtimer = time.time()#更新计时器
                 for i in range(baseSEQ,nextseqnum):
                     senderSocket.sendto(GBNcache[i],addr)
+                blockStatus = 2
+                ssthresh = int(blockWindow)/2
+                blockWindow = 1
         print("sender receive ack")
     #关闭接受端与客户端
     senderSocket.sendto(generateBitFromDict({"optLength":3,"Options":b"eof","FIN":b'1'}),addr)
@@ -120,7 +149,7 @@ def sender(port,q,fileName,addr):
         except queue.Empty:
             print("Sender resend FIN")
             overCount += 1
-            if overCount > 5:
+            if overCount > 3:
                 break
             senderSocket.sendto(generateBitFromDict({"optLength":3,"Options":b"eof","FIN":b'1'}),addr)
     senderSocket.sendto(generateBitFromDict({"optLength":3,"Options":b"end","FIN":b'1'}),('127.0.0.1',port-1))
