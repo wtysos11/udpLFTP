@@ -195,8 +195,10 @@ GBN接受方逻辑
     如果收到的包符合expectedSeqValue，输出，并expectedSeqValue += 1
 返回ACK expectedSeqValue
 '''
-def fileReceiver(s,serverReceiverAddr):
+def fileReceiver(port,serverReceiverAddr):
     expectedSeqValue = 1
+    s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+    s.bind(('127.0.0.1',port))
     while True:
         data,addr = s.recvfrom(FileReceivePackMax)
         packet = packetHead(data)
