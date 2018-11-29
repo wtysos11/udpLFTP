@@ -14,12 +14,13 @@ while serverConnected:
     data,addr = s.recvfrom(1024)
     print("Main thread receive link request from",addr)
     packet = packetHead(data)
+    print(packet.dict)
     if packet.dict["FIN"] == b'1':
         break
-        '''
+        
     elif packet.dict["SEQvalue"]>0:
         s.sendto(generateBitFromDict({"ACK":b'1',"ACKvalue":packet.dict["SEQvalue"]}),addr)
-    '''
+    
     jsonOptions = packet.dict["Options"].decode("utf-8")
     jsonOptions = json.loads(jsonOptions)
     filename = jsonOptions["filename"]
@@ -28,7 +29,7 @@ while serverConnected:
     receiverPort = jsonOptions["ReceiverPort"]
     print("Main thread receive filename: ",filename," with operation ",operation)
     backJson = bytes(json.dumps({"serverReceiverPort":appPortNum}),encoding = 'utf-8')
-    #rdt_send(s,addr,generateBitFromDict({"SEQvalue":2,"optLength":len(backJson),"Options":backJson,"RecvWindow":FileReceivePackNumMax*FileReceivePackMax}),2)
+    rdt_send(s,addr,generateBitFromDict({"SEQvalue":2,"optLength":len(backJson),"Options":backJson,"RecvWindow":FileReceivePackNumMax*FileReceivePackMax}),2)
     s.sendto(generateBitFromDict({"SEQvalue":2,"optLength":len(backJson),"Options":backJson,"RecvWindow":FileReceivePackNumMax*FileReceivePackMax}),addr)
     if operation == "download":
         transferQueue = queue.Queue()

@@ -1,4 +1,4 @@
-import socket,random,json,threading,queue,sys
+import socket,random,json,threading,queue,sys,time
 from packetHead import packetHead,generateBitFromDict 
 from udpUtil import *
 from rdtPacketTransfer import rdt_send
@@ -15,16 +15,18 @@ if __name__ == '__main__':
         filename = sys.argv[3]
     else:
         print("Need 3 arguments: destUrl operation and filename.")
+
     s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     s.bind(('',clientListenPort))
     jsonOptions = bytes(json.dumps({'filename':filename,"operation":operation,"ReceiverPort":appPortNum}),encoding='utf-8')
-    #rdt_send(s,(destUrl,serverPort),generateBitFromDict({"SEQvalue":1,"optLength":len(jsonOptions),"Options":jsonOptions,"RecvWindow":FileReceivePackNumMax*FileReceivePackMax}),1)
-    s.sendto(generateBitFromDict({"SEQvalue":1,"optLength":len(jsonOptions),"Options":jsonOptions,"RecvWindow":FileReceivePackNumMax*FileReceivePackMax}),(destUrl,serverPort))
+    print("Sending jsonOptions",jsonOptions,"with length",len(jsonOptions))
+    rdt_send(s,(destUrl,serverPort),generateBitFromDict({"SEQvalue":1,"optLength":len(jsonOptions),"Options":jsonOptions,"RecvWindow":FileReceivePackNumMax*FileReceivePackMax}),1)
+
     receiveServerReceiverPort = False
     while not receiveServerReceiverPort:
         data,addr = s.recvfrom(FileReceivePackMax)
         packet = packetHead(data)
-        #s.sendto(generateBitFromDict({"ACK":b'1',"ACKvalue":packet.dict["SEQvalue"]}),addr)
+        s.sendto(generateBitFromDict({"ACK":b'1',"ACKvalue":packet.dict["SEQvalue"]}),addr)
         try:
             jsonOptions = json.loads(packet.dict["Options"].decode("utf-8"))
             if "serverReceiverPort" in jsonOptions:

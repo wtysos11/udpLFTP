@@ -10,7 +10,7 @@ config.TransferSenderPacketDataSize = 4000 #从文件中读取的数据的大小
 config.blockWindow = 1 #阻塞窗口初始值
 config.ssthresh = 10 #拥塞避免阈值
 config.FileReceivePackMax = 4096 #客户端接受数据包的长度最大为1024bytes
-config.FileReceivePackNumMax = 50 #最多能够接受50个这样的数据包
+config.FileReceivePackNumMax = 10 #最多能够接受50个这样的数据包
 #经常使用的常量值
 GBNWindowMax = config.GBNWindowMax
 senderTimeoutValue = config.senderTimeoutValue
@@ -213,6 +213,8 @@ def fileReceiver(port,serverReceiverAddr,filename):
     expectedSeqValue = 1
     s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     s.bind(('127.0.0.1',port))
+    start_time = time.time()
+    total_length = 0
     with open(filename,"ab+") as f:
         while True:
             data,addr = s.recvfrom(FileReceivePackMax)
@@ -231,9 +233,14 @@ def fileReceiver(port,serverReceiverAddr,filename):
             elif packet.dict["SEQvalue"] == expectedSeqValue:
                 print("Receive packet with correct seq value:",expectedSeqValue)
                 f.write(packet.dict["Data"])
+                total_length += len(packet.dict["Data"])
                 s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":FileReceivePackMax*FileReceivePackNumMax}),serverReceiverAddr)
                 expectedSeqValue += 1
             else:#收到了不对的包
                 #print("Wrong data.",expectedSeqValue)
                 s.sendto(generateBitFromDict({"ACKvalue":0,"ACK":b'1',"RecvWindow":FileReceivePackMax*FileReceivePackNumMax}),serverReceiverAddr)
         #s.sendto(generateBitFromDict({"FIN":b'1'}),('127.0.0.1',9999))#关闭服务器，调试用
+    end_time = time.time()
+    total_length/=1024
+    total_length/=(end_time-start_time)
+    print("Transfer speed",total_length,"KB/s")
