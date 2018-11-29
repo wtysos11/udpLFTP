@@ -9,9 +9,10 @@ appPortNum = 10000
 s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
 s.bind(('127.0.0.1',mainport))
 serverConnected = True
+print("Server start to work on port",mainport)
 while serverConnected:
     data,addr = s.recvfrom(1024)
-    print("Main thread receive data",data)
+    print("Main thread receive link request from",addr)
     packet = packetHead(data)
     if packet.dict["FIN"] == b'1':
         break

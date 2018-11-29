@@ -4,12 +4,12 @@ from rdtPacketTransfer import rdt_send
 
 import config
 #声明全局变量
-config.GBNWindowMax = 5 #GBN窗口大小，意味最多等待1000个未确认的包
-config.senderTimeoutValue = 1.0 #下载时发送端等待超时为1.0s
-config.TransferSenderPacketDataSize = 50 #从文件中读取的数据的大小，发送包中数据的大小。
+config.GBNWindowMax = 10 #GBN窗口大小，意味最多等待1000个未确认的包
+config.senderTimeoutValue = 0.5 #下载时发送端等待超时为1.0s
+config.TransferSenderPacketDataSize = 4000 #从文件中读取的数据的大小，发送包中数据的大小。
 config.blockWindow = 1 #阻塞窗口初始值
 config.ssthresh = 10 #拥塞避免阈值
-config.FileReceivePackMax = 1024 #客户端接受数据包的长度最大为1024bytes
+config.FileReceivePackMax = 4096 #客户端接受数据包的长度最大为1024bytes
 config.FileReceivePackNumMax = 50 #最多能够接受50个这样的数据包
 #经常使用的常量值
 GBNWindowMax = config.GBNWindowMax
@@ -50,7 +50,6 @@ def TransferSender(port,q,fileName,addr,cacheMax):
         如果baseSEQ = nextseqnum，则解除置位,sendValuable = True
     '''
     global blockWindow,ssthresh
-    print("Enter sender with filename",fileName)
     senderSocket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     senderSocket.bind(('127.0.0.1',port))
     f = open(fileName,"rb")
@@ -76,7 +75,7 @@ def TransferSender(port,q,fileName,addr,cacheMax):
         while sendValueable:#如果可以读入数据
 
             data = f.read(TransferSenderPacketDataSize)
-            print("sender read file with data: ",data)
+            print("sender read file with data length: ",len(data))
             if data == b'':#文件读入完毕
                 print("File read end.")
                 sendValueable = False
@@ -86,7 +85,7 @@ def TransferSender(port,q,fileName,addr,cacheMax):
                 GBNtimer = time.time()
             GBNcache[nextseqnum] = generateBitFromDict({"SEQvalue":nextseqnum,"Data":data})
             senderSocket.sendto(GBNcache[nextseqnum],addr)
-            print("Sender send",data)
+            print("Sender send data with seqnum:",nextseqnum)
             nextseqnum += 1
             senderSendDataSize = TransferSenderPacketDataSize * (nextseqnum - baseSEQ)
             if nextseqnum - baseSEQ >=GBNWindowMax or nextseqnum - baseSEQ >= blockWindow:
@@ -169,7 +168,6 @@ def TransferSender(port,q,fileName,addr,cacheMax):
                 else:
                     GBNtimer = time.time()
                     senderSocket.sendto(generateBitFromDict({}),addr)
-        print("sender receive ack")
     #关闭接受端与客户端
     senderSocket.sendto(generateBitFromDict({"optLength":3,"Options":b"eof","FIN":b'1'}),addr)
     receiveFIN = False
@@ -231,6 +229,7 @@ def fileReceiver(port,serverReceiverAddr,filename):
                 s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":FileReceivePackMax*FileReceivePackNumMax}),serverReceiverAddr)
                 break
             elif packet.dict["SEQvalue"] == expectedSeqValue:
+                print("Receive packet with correct seq value:",expectedSeqValue)
                 f.write(packet.dict["Data"])
                 s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":FileReceivePackMax*FileReceivePackNumMax}),serverReceiverAddr)
                 expectedSeqValue += 1
