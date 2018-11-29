@@ -38,7 +38,8 @@ while serverConnected:
         appPortNum += 2
         rec_thread.start()
         send_thread.start()
-    elif operation == "upload":      
+    elif operation == "upload":
+        print("Receive upload backup port:",receiverPort)    
         rec_thread = threading.Thread(target = fileReceiver , args = (appPortNum,(addr[0],receiverPort),filename,))
         rec_thread.start()
     print("Thread start")
