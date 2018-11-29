@@ -113,6 +113,7 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
         previousACK = 0 #重复接受ACK计数器
         receiveACK = False
         counter = 0
+        ForceTime = 0
         while not receiveACK:
             try:
                 receiveData = q.get(timeout = senderTimeoutValue)
@@ -167,7 +168,14 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
                 if currentTime - GBNtimer > senderTimeoutValue and not ClientBlock:
                     print("Time out and output current sequence number",baseSEQ)
                     GBNtimer = time.time()#更新计时器
-                    for i in range(baseSEQ,nextseqnum):
+                    baseRepeat = baseSEQ
+                    ForceTime += 1
+                    if ForceTime > 3:
+                        ForceTime = 0
+                        baseRepeat -= 10
+                        if baseRepeat<0:
+                            baseRepeat = 0
+                    for i in range(baseRepeat,nextseqnum):
                         packet = packetHead(GBNcache[i])
                         print("Check resend packet SEQ:",packet.dict["SEQvalue"])
                         senderSocket.sendto(GBNcache[i],addr)
@@ -181,9 +189,16 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
                     senderSocket.sendto(generateBitFromDict({}),addr)#向目标发送空包以更新recvWindow
             except queue.Empty: #超时，发包
                 if not ClientBlock:
+                    baseRepeat = baseSEQ
                     print("Time out and output current sequence number",baseSEQ)
+                    ForceTime += 1
+                    if ForceTime > 3:
+                        ForceTime = 0
+                        baseRepeat -= 10
+                        if baseRepeat<0:
+                            baseRepeat = 0
                     GBNtimer = time.time()#更新计时器
-                    for i in range(baseSEQ,nextseqnum):
+                    for i in range(baseRepeat,nextseqnum):
                         packet = packetHead(GBNcache[i])
                         print("Check resend packet SEQ:",packet.dict["SEQvalue"])
                         senderSocket.sendto(GBNcache[i],addr)
