@@ -25,6 +25,7 @@ def rdt_send(s,addr,bitStream,expectedACK):
     q = queue.Queue()
     listener_thread = threading.Thread(target=rdt_listener,args = (s,q,expectedACK,))
     listener_thread.start()
+    print("Ready to send ",bitStream," to ",addr)
     s.sendto(bitStream,addr)
     ackGet = False
     counter = 1

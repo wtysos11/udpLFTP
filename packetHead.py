@@ -19,13 +19,13 @@ def originBin2Hex(bStr):
             if point+4 >= len(bStr):
                 hex1 = bStr[point:]
                 while len(hex1) < 4:
-                    hex1 +='0'
-                hex2 = '0000'
+                    hex1 +=b'0'
+                hex2 = b'0000'
             else:
                 hex1 = bStr[point:point+4]
                 hex2 = bStr[point+4:]
                 while len(hex2) < 4:
-                    hex2+='0'
+                    hex2+=b'0'
         else:
             hex1 = bStr[point:point+4]
             hex2 = bStr[point+4:point+8]

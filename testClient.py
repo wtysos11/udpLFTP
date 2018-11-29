@@ -3,7 +3,8 @@ from rdtPacketTransfer import *
 from packetHead import *
 
 s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-s.bind(('127.0.0.1',10000))
-for i in range(10):
-    rdt_send(s,('127.0.0.1',9999),generateBitFromDict({"SEQvalue":i}),i)
-    print(i)
+host = '123.207.228.157'
+portNum = 9999
+sAddr = (host,portNum)
+s.bind(('127.0.0.1',10000))#if add this, then it can't send to remote server
+s.sendto(b'Hello',sAddr)

@@ -5,7 +5,7 @@ from rdtPacketTransfer import rdt_send
 filename = "test.txt"
 destUrl = '127.0.0.1'
 operation = "download"
-serverPort = 9999
+serverPort = 9999 #服务器工作的主端口
 clientListenPort = 9990
 appPortNum = 8000
 if __name__ == '__main__':
