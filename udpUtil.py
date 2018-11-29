@@ -63,9 +63,9 @@ def TransferSender(port,q,fileName,addr,cacheMax):
     sendOver = False
     ClientBlock = False
     blockStatus = 1#1意味着处于指数增长；2意味着线性增长
-
     senderSendDataSize = 0 #记录当前已经发送的数据量，这个量不能超过对面缓存区的大小
-    print("Ready to send to",addr)
+
+    
     #拥塞控制相关：
     # 正常情况下，发送端收到ACK后双倍发送（拥塞窗口倍增）
     # 如果超时，拥塞窗口变为1，并开始线性增长。更新ssthresh = 当前拥塞窗口的一半
@@ -98,6 +98,7 @@ def TransferSender(port,q,fileName,addr,cacheMax):
                 print("Client cache full.")
 
         #等待接收ACK
+        previousACK = 0 #重复接受ACK计数器
         receiveACK = False
         counter = 0
         while not receiveACK:
@@ -132,7 +133,7 @@ def TransferSender(port,q,fileName,addr,cacheMax):
                         if sendOver:
                             senderClose = True
                         break
-                elif ack == 0:
+                elif ack == previousACK:
                     counter += 1
                     if counter >=3:#收到三次重复的ACK
                         counter = 0
@@ -143,11 +144,14 @@ def TransferSender(port,q,fileName,addr,cacheMax):
                         blockStatus = 2
                         raise queue.Empty
                     continue
+                else:
+                    previousACK = ack
+                    counter = 1
 
 
                 currentTime = time.time()
                 if currentTime - GBNtimer > senderTimeoutValue and not ClientBlock:
-                    print("Time out and output from",baseSEQ)
+                    print("Time out and output current sequence number",baseSEQ)
                     GBNtimer = time.time()#更新计时器
                     for i in range(baseSEQ,nextseqnum):
                         senderSocket.sendto(GBNcache[i],addr)
@@ -159,7 +163,7 @@ def TransferSender(port,q,fileName,addr,cacheMax):
                     senderSocket.sendto(generateBitFromDict({}),addr)#向目标发送空包以更新recvWindow
             except queue.Empty: #超时，发包
                 if not ClientBlock:
-                    print("Time out and output from",baseSEQ)
+                    print("Time out and output current sequence number",baseSEQ)
                     GBNtimer = time.time()#更新计时器
                     for i in range(baseSEQ,nextseqnum):
                         senderSocket.sendto(GBNcache[i],addr)
@@ -183,7 +187,7 @@ def TransferSender(port,q,fileName,addr,cacheMax):
             print("Sender try to close but receive unproper ack:",ack)
             if ack == nextseqnum:
                 receiveFIN = True
-            elif ack == 0:
+            elif ack == nextseqnum-1:
                 counter+=1
                 if counter >= 3:
                     counter = 0
@@ -237,9 +241,9 @@ def fileReceiver(port,serverReceiverAddr,filename):
                 total_length += len(packet.dict["Data"])
                 s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":FileReceivePackMax*FileReceivePackNumMax}),serverReceiverAddr)
                 expectedSeqValue += 1
-            else:#收到了不对的包
+            else:#收到了不对的包，则返回expectedSeqValue-1，表示在这之前的都收到了
                 #print("Wrong data.",expectedSeqValue)
-                s.sendto(generateBitFromDict({"ACKvalue":0,"ACK":b'1',"RecvWindow":FileReceivePackMax*FileReceivePackNumMax}),serverReceiverAddr)
+                s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue-1,"ACK":b'1',"RecvWindow":FileReceivePackMax*FileReceivePackNumMax}),serverReceiverAddr)
         #s.sendto(generateBitFromDict({"FIN":b'1'}),('127.0.0.1',9999))#关闭服务器，调试用
     end_time = time.time()
     total_length/=1024
