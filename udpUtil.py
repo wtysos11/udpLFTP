@@ -276,11 +276,14 @@ def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
     expectedSeqValue = 1
     start_time = time.time()
     total_length = 0
+    total_num = 0
+    ac_num = 0
     with open(filename,"ab+") as f:
         while True:
             data,addr = s.recvfrom(FileReceivePackMax)
             packet = packetHead(data)
             print("receive packet with seq",packet.dict["SEQvalue"])
+            total_num += 1
             #随机丢包
             '''
             if random.random()>0.8:
@@ -295,6 +298,7 @@ def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
                 print("Receive packet with correct seq value:",expectedSeqValue)
                 f.write(packet.dict["Data"])
                 total_length += len(packet.dict["Data"])
+                ac_num +=1
                 s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":FileReceivePackNumMax}),serverReceiverAddr)
                 expectedSeqValue += 1
             else:#收到了不对的包，则返回expectedSeqValue-1，表示在这之前的都收到了
@@ -305,3 +309,4 @@ def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
     total_length/=1024
     total_length/=(end_time-start_time)
     print("Transfer speed",total_length,"KB/s")
+    print("有效接收率",ac_num/total_num)
