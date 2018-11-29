@@ -2,6 +2,9 @@ import socket,random,json,threading,queue,sys,time
 from packetHead import packetHead,generateBitFromDict 
 from udpUtil import *
 from rdtPacketTransfer import rdt_send
+import config
+FileReceivePackMax = config.FileReceivePackMax
+FileReceivePackNumMax = config.FileReceivePackNumMax
 filename = "test.txt"
 destUrl = '127.0.0.1'
 operation = "download"
@@ -30,20 +33,20 @@ if __name__ == '__main__':
         try:
             jsonOptions = json.loads(packet.dict["Options"].decode("utf-8"))
             if "serverReceiverPort" in jsonOptions:
-                serverReceiverPort = jsonOptions["serverReceiverPort"]
+                serverReceiverPort = jsonOptions["serverReceiverPort"]#客户端收到的外网端口是有效的。
                 cacheMax = packet.dict["RecvWindow"]
                 receiveServerReceiverPort = True
         except:#如果接受到空包的话，loads会抛出异常
             pass
     
     if operation == "download":
-        receiver_thread = threading.Thread(target = fileReceiver,args = (appPortNum,(destUrl,serverReceiverPort),filename))
+        receiver_thread = threading.Thread(target = fileReceiver,args = (appPortNum,(destUrl,serverReceiverPort),(destUrl,serverReceiverPort+1),filename,True,))#isClient = True
         receiver_thread.start()
         receiver_thread.join()
     elif operation == "upload":
         transferQueue = queue.Queue()
-        rec_thread = threading.Thread(target = TransferReceiver,args = (appPortNum,transferQueue,))
-        send_thread = threading.Thread(target = TransferSender,args = (appPortNum+1,transferQueue,filename,(destUrl,serverReceiverPort),cacheMax,))
+        rec_thread = threading.Thread(target = TransferReceiver,args = (appPortNum,transferQueue,(destUrl,serverReceiverPort),True,))#isClient = True
+        send_thread = threading.Thread(target = TransferSender,args = (appPortNum+1,transferQueue,filename,(destUrl,serverReceiverPort),cacheMax,True,))
         rec_thread.start()
         send_thread.start()
         rec_thread.join()

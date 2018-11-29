@@ -21,9 +21,13 @@ ssthresh = config.ssthresh
 
 ### GBN接收方逻辑
 # queue类q用来传递ack的值
-def TransferReceiver(port,q):
+def TransferReceiver(port,q,aimAddr,isClient):
     receiverSocket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     receiverSocket.bind(('',port))
+    if isClient:
+        rdt_send(receiverSocket,aimAddr,generateBitFromDict({"SEQvalue":0}),0)
+        print("Server receive address and client get ack0 . Can transport now.")
+        q.put(0)
     while True:
         data,addr = receiverSocket.recvfrom(1024)
         if addr[0] == '127.0.0.1' and addr[1] == port+1:
@@ -38,7 +42,7 @@ def TransferReceiver(port,q):
     print("receiver close")
 
 
-def TransferSender(port,q,fileName,addr,cacheMax):
+def TransferSender(port,q,fileName,addr,cacheMax,isClient):
     '''
     GBN发送方逻辑
     尝试从文件中读取数据
@@ -52,6 +56,14 @@ def TransferSender(port,q,fileName,addr,cacheMax):
     global blockWindow,ssthresh
     senderSocket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     senderSocket.bind(('',port))
+    if isClient:
+        ack = q.get(block = True)
+        print("Client get ack from server. Addr transport success.")
+    else:
+        data,addr = senderSocket.recvfrom(FileReceivePackMax)
+        senderSocket.sendto(generateBitFromDict({"ACKvalue":0,"ACK":b'1'}),addr)
+        print("Server receive client receiver addr",addr)
+
     f = open(fileName,"rb")
     #待确认的包的数量nextseqnum - baseSEQ <= GBNWindowMax
     baseSEQ = 1
@@ -208,23 +220,31 @@ def TransferSender(port,q,fileName,addr,cacheMax):
 FileReceivePackMax = config.FileReceivePackMax
 FileReceivePackNumMax = config.FileReceivePackNumMax
 
-def fileReceiver(port,serverReceiverAddr,filename):
+def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
     '''
     GBN接受方逻辑
     不断收包
         如果收到的包符合expectedSeqValue，输出，并expectedSeqValue += 1
     返回ACK expectedSeqValue
     '''
-    expectedSeqValue = 1
     s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     s.bind(('',port))
+    if isClient:
+        rdt_send(s,senderSenderAddr,generateBitFromDict({"SEQvalue":0}),0)
+        print("Client file receiver successfully send addr.")
+    else:
+        data,serverReceiverAddr = s.recvfrom(FileReceivePackMax)
+        s.sendto(generateBitFromDict({"ACKvalue":0,"ACK":b'1'}),serverReceiverAddr)
+        print("Server file receiver successfully receive addr",serverReceiverAddr)
+
+    expectedSeqValue = 1
     start_time = time.time()
     total_length = 0
     with open(filename,"ab+") as f:
         while True:
             data,addr = s.recvfrom(FileReceivePackMax)
             packet = packetHead(data)
-            print("receive ",packet.dict["Data"]," with seq",packet.dict["SEQvalue"])
+            print("receive packet with seq",packet.dict["SEQvalue"])
             #随机丢包
             '''
             if random.random()>0.8:
