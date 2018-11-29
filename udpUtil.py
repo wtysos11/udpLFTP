@@ -4,14 +4,14 @@ from rdtPacketTransfer import rdt_send
 from collections import deque
 import config
 #声明全局变量
-config.GBNWindowMax = 10 #GBN窗口大小，意味最多等待100个未确认的包
+config.GBNWindowMax = 30 #GBN窗口大小，意味最多等待100个未确认的包
 config.senderTimeoutValue = 0.5 #下载时发送端等待超时的时间
 config.TransferSenderPacketDataSize = 4000 #从文件中读取的数据的大小，发送包中数据的大小。
 config.blockWindow = 1 #阻塞窗口初始值
 config.ssthresh = 10 #拥塞避免阈值
 config.FileReceivePackMax = 4096 #客户端接受数据包的长度最大为1024bytes
-config.FileReceivePackNumMax = 500 #文件接受者最多能够接受500个这样的数据包
-config.RcvBuffer = 500 #文件接受者最多接受500个这样的数据包
+config.FileReceivePackNumMax = 1000 #文件接受者最多能够接受500个这样的数据包
+config.RcvBuffer = 1000 #文件接受者最多接受500个这样的数据包
 #经常使用的常量值
 GBNWindowMax = config.GBNWindowMax
 senderTimeoutValue = config.senderTimeoutValue
