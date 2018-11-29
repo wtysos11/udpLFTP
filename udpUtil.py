@@ -10,7 +10,7 @@ config.TransferSenderPacketDataSize = 4000 #从文件中读取的数据的大小
 config.blockWindow = 1 #阻塞窗口初始值
 config.ssthresh = 10 #拥塞避免阈值
 config.FileReceivePackMax = 4096 #客户端接受数据包的长度最大为1024bytes
-config.FileReceivePackNumMax = 10 #最多能够接受50个这样的数据包
+config.FileReceivePackNumMax = 14 #最多能够接受50个这样的数据包
 #经常使用的常量值
 GBNWindowMax = config.GBNWindowMax
 senderTimeoutValue = config.senderTimeoutValue
@@ -75,7 +75,7 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
     sendOver = False
     ClientBlock = False
     blockStatus = 1#1意味着处于指数增长；2意味着线性增长
-    senderSendDataSize = 0 #记录当前已经发送的数据量，这个量不能超过对面缓存区的大小
+    senderSendPacketNum = 0 #记录当前已经发送的数据量，这个量不能超过对面缓存区的大小
 
     
     #拥塞控制相关：
@@ -100,11 +100,11 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
             senderSocket.sendto(GBNcache[nextseqnum],addr)
             print("Sender send data with seqnum:",nextseqnum)
             nextseqnum += 1
-            senderSendDataSize = TransferSenderPacketDataSize * (nextseqnum - baseSEQ)
+            senderSendPacketNum = nextseqnum - baseSEQ
             if nextseqnum - baseSEQ >=GBNWindowMax or nextseqnum - baseSEQ >= blockWindow:
                 sendValueable = False
                 print("Up to limit ",nextseqnum - baseSEQ,GBNWindowMax,blockWindow)
-            elif senderSendDataSize > cacheMax:
+            elif senderSendPacketNum > cacheMax:
                 sendValueable = False
                 ClientBlock = True
                 print("Client cache full.")
@@ -121,7 +121,7 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
                 ack = receivePacket.dict["ACKvalue"]
                 cacheMax = receivePacket.dict["RecvWindow"]
 
-                if senderSendDataSize <= cacheMax:
+                if senderSendPacketNum <= cacheMax:
                     ClientBlock = False
                 else:
                     ClientBlock = True
@@ -130,7 +130,7 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
                 if ack >= baseSEQ:
                     print("update baseSEQ to ",ack+1," with nextseqnum",nextseqnum)
                     baseSEQ = ack+1
-                    senderSendDataSize = (nextseqnum-baseSEQ)*FileReceivePackMax#更新流控制未确定名单
+                    senderSendPacketNum = nextseqnum-baseSEQ#更新流控制未确定名单
                     receiveACK = True #收到ACK，脱离超时循环
                     GBNtimer = time.time()#更新计时器
                     if baseSEQ == nextseqnum:#前一阶段发送完毕
@@ -262,17 +262,17 @@ def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
             '''
             if packet.dict["FIN"] == b'1':#如果收到FIN包，则退出
                 print("receive eof, client over.")
-                s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":FileReceivePackMax*FileReceivePackNumMax}),serverReceiverAddr)
+                s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":FileReceivePackNumMax}),serverReceiverAddr)
                 break
             elif packet.dict["SEQvalue"] == expectedSeqValue:
                 print("Receive packet with correct seq value:",expectedSeqValue)
                 f.write(packet.dict["Data"])
                 total_length += len(packet.dict["Data"])
-                s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":FileReceivePackMax*FileReceivePackNumMax}),serverReceiverAddr)
+                s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":FileReceivePackNumMax}),serverReceiverAddr)
                 expectedSeqValue += 1
             else:#收到了不对的包，则返回expectedSeqValue-1，表示在这之前的都收到了
-                print("Wrong data.",expectedSeqValue," send ACK ",expectedSeqValue-1,"to receiver ",serverReceiverAddr)
-                s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue-1,"ACK":b'1',"RecvWindow":FileReceivePackMax*FileReceivePackNumMax}),serverReceiverAddr)
+                print("Expect ",expectedSeqValue," while receive",packet.dict["SEQvalue"]," send ACK ",expectedSeqValue-1,"to receiver ",serverReceiverAddr)
+                s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue-1,"ACK":b'1',"RecvWindow":FileReceivePackNumMax}),serverReceiverAddr)
         #s.sendto(generateBitFromDict({"FIN":b'1'}),('127.0.0.1',9999))#关闭服务器，调试用
     end_time = time.time()
     total_length/=1024

@@ -23,7 +23,7 @@ if __name__ == '__main__':
     s.bind(('',clientListenPort))
     jsonOptions = bytes(json.dumps({'filename':filename,"operation":operation,"ReceiverPort":appPortNum}),encoding='utf-8')
     print("Sending jsonOptions",jsonOptions,"with length",len(jsonOptions))
-    rdt_send(s,(destUrl,serverPort),generateBitFromDict({"SEQvalue":1,"optLength":len(jsonOptions),"Options":jsonOptions,"RecvWindow":FileReceivePackNumMax*FileReceivePackMax}),1)
+    rdt_send(s,(destUrl,serverPort),generateBitFromDict({"SEQvalue":1,"optLength":len(jsonOptions),"Options":jsonOptions,"RecvWindow":FileReceivePackNumMax}),1)
 
     receiveServerReceiverPort = False
     while not receiveServerReceiverPort:

@@ -31,8 +31,8 @@ while serverConnected:
     receiverPort = jsonOptions["ReceiverPort"]#收到的端口是无效的
     print("Main thread receive filename: ",filename," with operation ",operation)
     backJson = bytes(json.dumps({"serverReceiverPort":appPortNum}),encoding = 'utf-8')
-    rdt_send(s,addr,generateBitFromDict({"SEQvalue":2,"optLength":len(backJson),"Options":backJson,"RecvWindow":FileReceivePackNumMax*FileReceivePackMax}),2)
-    s.sendto(generateBitFromDict({"SEQvalue":2,"optLength":len(backJson),"Options":backJson,"RecvWindow":FileReceivePackNumMax*FileReceivePackMax}),addr)
+    rdt_send(s,addr,generateBitFromDict({"SEQvalue":2,"optLength":len(backJson),"Options":backJson,"RecvWindow":FileReceivePackNumMax}),2)
+    s.sendto(generateBitFromDict({"SEQvalue":2,"optLength":len(backJson),"Options":backJson,"RecvWindow":FileReceivePackNumMax}),addr)
     if operation == "download":
         transferQueue = queue.Queue()
         rec_thread = threading.Thread(target = TransferReceiver,args = (appPortNum,transferQueue,(addr[0],receiverPort),False,))#isClient = False
