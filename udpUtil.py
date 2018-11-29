@@ -4,13 +4,14 @@ from rdtPacketTransfer import rdt_send
 
 import config
 #声明全局变量
-config.GBNWindowMax = 10 #GBN窗口大小，意味最多等待1000个未确认的包
-config.senderTimeoutValue = 0.5 #下载时发送端等待超时为1.0s
+config.GBNWindowMax = 10 #GBN窗口大小，意味最多等待100个未确认的包
+config.senderTimeoutValue = 0.5 #下载时发送端等待超时的时间
 config.TransferSenderPacketDataSize = 4000 #从文件中读取的数据的大小，发送包中数据的大小。
 config.blockWindow = 1 #阻塞窗口初始值
 config.ssthresh = 10 #拥塞避免阈值
 config.FileReceivePackMax = 4096 #客户端接受数据包的长度最大为1024bytes
-config.FileReceivePackNumMax = 14 #最多能够接受50个这样的数据包
+config.FileReceivePackNumMax = 500 #文件接受者最多能够接受500个这样的数据包
+config.RcvBuffer = 500 #文件接受者最多接受500个这样的数据包
 #经常使用的常量值
 GBNWindowMax = config.GBNWindowMax
 senderTimeoutValue = config.senderTimeoutValue
@@ -107,6 +108,7 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
             elif senderSendPacketNum > cacheMax:
                 sendValueable = False
                 ClientBlock = True
+                print("待确认包的数量：",senderSendPacketNum,"最大缓存：",cacheMax)
                 print("Client cache full.")
 
         #等待接收ACK
@@ -187,6 +189,11 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
                 elif currentTime - GBNtimer > senderTimeoutValue and ClientBlock:
                     GBNtimer = time.time()
                     senderSocket.sendto(generateBitFromDict({}),addr)#向目标发送空包以更新recvWindow
+                    senderSendPacketNum = nextseqnum - baseSEQ
+                    if senderSendPacketNum <= cacheMax:
+                        ClientBlock = False
+                    else:
+                        ClientBlock = True
             except queue.Empty: #超时，发包
                 if not ClientBlock:
                     baseRepeat = baseSEQ
@@ -209,6 +216,11 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
                     print("Update flow control value.")
                     GBNtimer = time.time()
                     senderSocket.sendto(generateBitFromDict({}),addr)
+                    senderSendPacketNum = nextseqnum - baseSEQ
+                    if senderSendPacketNum <= cacheMax:
+                        ClientBlock = False
+                    else:
+                        ClientBlock = True
     #关闭接受端与客户端
     senderSocket.sendto(generateBitFromDict({"optLength":3,"Options":b"eof","FIN":b'1'}),addr)
     receiveFIN = False

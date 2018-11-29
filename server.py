@@ -7,7 +7,7 @@ FileReceivePackMax = config.FileReceivePackMax
 FileReceivePackNumMax = config.FileReceivePackNumMax
 
 mainport = 9999
-appPortNum = 10000
+appPortNum = 20000
 s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
 s.bind(('',mainport))
 serverConnected = True
