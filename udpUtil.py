@@ -126,10 +126,11 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
                 else:
                     ClientBlock = True
                 
+                print("Sender receive ack",ack," with baseSEQ",baseSEQ)
                 if ack >= baseSEQ:
                     print("update baseSEQ to ",ack+1," with nextseqnum",nextseqnum)
                     baseSEQ = ack+1
-                    senderSendDataSize = (nextseqnum-baseSEQ)*senderSendDataSize#更新流控制未确定名单
+                    senderSendDataSize = (nextseqnum-baseSEQ)*FileReceivePackMax#更新流控制未确定名单
                     receiveACK = True #收到ACK，脱离超时循环
                     GBNtimer = time.time()#更新计时器
                     if baseSEQ == nextseqnum:#前一阶段发送完毕
@@ -148,6 +149,7 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
                 elif ack == previousACK:
                     counter += 1
                     if counter >=3:#收到三次重复的ACK
+                        print("Three times duplicated ACK",previousACK," ,resend now!")
                         counter = 0
                         if blockWindow>ssthresh:
                             blockWindow = ssthresh
@@ -166,9 +168,13 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
                     print("Time out and output current sequence number",baseSEQ)
                     GBNtimer = time.time()#更新计时器
                     for i in range(baseSEQ,nextseqnum):
+                        packet = packetHead(GBNcache[i])
+                        print("Check resend packet SEQ:",packet.dict["SEQvalue"])
                         senderSocket.sendto(GBNcache[i],addr)
                     blockStatus = 2
                     ssthresh = int(blockWindow)/2
+                    if ssthresh<=0:
+                        ssthresh = 1
                     blockWindow = 1
                 elif currentTime - GBNtimer > senderTimeoutValue and ClientBlock:
                     GBNtimer = time.time()
@@ -178,11 +184,14 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
                     print("Time out and output current sequence number",baseSEQ)
                     GBNtimer = time.time()#更新计时器
                     for i in range(baseSEQ,nextseqnum):
+                        packet = packetHead(GBNcache[i])
+                        print("Check resend packet SEQ:",packet.dict["SEQvalue"])
                         senderSocket.sendto(GBNcache[i],addr)
                     blockStatus = 2
                     ssthresh = int(blockWindow)/2
                     blockWindow = 1
                 else:
+                    print("Update flow control value.")
                     GBNtimer = time.time()
                     senderSocket.sendto(generateBitFromDict({}),addr)
     #关闭接受端与客户端
