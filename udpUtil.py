@@ -23,7 +23,7 @@ ssthresh = config.ssthresh
 # queue类q用来传递ack的值
 def TransferReceiver(port,q):
     receiverSocket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-    receiverSocket.bind(('127.0.0.1',port))
+    receiverSocket.bind(('',port))
     while True:
         data,addr = receiverSocket.recvfrom(1024)
         if addr[0] == '127.0.0.1' and addr[1] == port+1:
@@ -51,7 +51,7 @@ def TransferSender(port,q,fileName,addr,cacheMax):
     '''
     global blockWindow,ssthresh
     senderSocket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-    senderSocket.bind(('127.0.0.1',port))
+    senderSocket.bind(('',port))
     f = open(fileName,"rb")
     #待确认的包的数量nextseqnum - baseSEQ <= GBNWindowMax
     baseSEQ = 1
@@ -65,6 +65,7 @@ def TransferSender(port,q,fileName,addr,cacheMax):
     blockStatus = 1#1意味着处于指数增长；2意味着线性增长
 
     senderSendDataSize = 0 #记录当前已经发送的数据量，这个量不能超过对面缓存区的大小
+    print("Ready to send to",addr)
     #拥塞控制相关：
     # 正常情况下，发送端收到ACK后双倍发送（拥塞窗口倍增）
     # 如果超时，拥塞窗口变为1，并开始线性增长。更新ssthresh = 当前拥塞窗口的一半
@@ -212,7 +213,7 @@ def fileReceiver(port,serverReceiverAddr,filename):
     '''
     expectedSeqValue = 1
     s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-    s.bind(('127.0.0.1',port))
+    s.bind(('',port))
     start_time = time.time()
     total_length = 0
     with open(filename,"ab+") as f:
