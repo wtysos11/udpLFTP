@@ -1,7 +1,7 @@
-import socket,queue,time,json,random
+import socket,queue,time,json,random,threading
 from packetHead import packetHead,generateBitFromDict
 from rdtPacketTransfer import rdt_send
-
+from collections import deque
 import config
 #声明全局变量
 config.GBNWindowMax = 10 #GBN窗口大小，意味最多等待100个未确认的包
@@ -255,8 +255,30 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
 #文件接收方
 FileReceivePackMax = config.FileReceivePackMax
 FileReceivePackNumMax = config.FileReceivePackNumMax
+FileWriteInterval = 1.0#磁盘每1s进行一次写操作
+RcvBuffer = config.RcvBuffer
+fileWriterEnd = False
+LastByteRcvd = 0
+LastByteRead = 0
+
+def fileWriter(filename,d,q):
+    '''使用双端队列作为缓存，如果队列不为空，则取出数据包并输出到磁盘中'''
+    global fileWriterEnd,LastByteRead
+    with open(filename,"ab+") as f:
+        while not fileWriterEnd:
+            try:
+                da = q.get(timeout = FileWriteInterval)
+            except queue.Empty:
+                while len(d)>0:
+                    data = d.popleft()
+                    packet = packetHead(data)
+                    LastByteRead = packet.dict["SEQvalue"]
+                    f.write(packet.dict["Data"])
+                print("fileWriter")#平均每个包出现三次左右
+
 
 def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
+    global fileWriterEnd,LastByteRead
     '''
     GBN接受方逻辑
     不断收包
@@ -273,38 +295,45 @@ def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
         s.sendto(generateBitFromDict({"ACKvalue":0,"ACK":b'1'}),serverReceiverAddr)
         print("Server file receiver successfully receive addr",serverReceiverAddr)
 
+    d = deque()
+    timeQueue = queue.Queue()#因为磁盘写入速度太快，导致文件写入线程空转。因此每隔一段时间向队列传入数据，使其运行。
+    fileThread = threading.Thread(target=fileWriter,args=(filename,d,timeQueue,))
+    fileThread.start()
     expectedSeqValue = 1
+    LastByteRcvd = 0
     start_time = time.time()
     total_length = 0
     total_num = 0
     ac_num = 0
-    with open(filename,"ab+") as f:
-        while True:
-            data,addr = s.recvfrom(FileReceivePackMax)
-            packet = packetHead(data)
-            print("receive packet with seq",packet.dict["SEQvalue"])
-            total_num += 1
-            #随机丢包
-            '''
-            if random.random()>0.8:
-                #print("Drop packet")
-                continue
-            '''
-            if packet.dict["FIN"] == b'1':#如果收到FIN包，则退出
-                print("receive eof, client over.")
-                s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":FileReceivePackNumMax}),serverReceiverAddr)
-                break
-            elif packet.dict["SEQvalue"] == expectedSeqValue:
-                print("Receive packet with correct seq value:",expectedSeqValue)
-                f.write(packet.dict["Data"])
-                total_length += len(packet.dict["Data"])
-                ac_num +=1
-                s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":FileReceivePackNumMax}),serverReceiverAddr)
-                expectedSeqValue += 1
-            else:#收到了不对的包，则返回expectedSeqValue-1，表示在这之前的都收到了
-                print("Expect ",expectedSeqValue," while receive",packet.dict["SEQvalue"]," send ACK ",expectedSeqValue-1,"to receiver ",serverReceiverAddr)
-                s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue-1,"ACK":b'1',"RecvWindow":FileReceivePackNumMax}),serverReceiverAddr)
-        #s.sendto(generateBitFromDict({"FIN":b'1'}),('127.0.0.1',9999))#关闭服务器，调试用
+    while True:
+        data,addr = s.recvfrom(FileReceivePackMax)
+        packet = packetHead(data)
+        print("receive packet with seq",packet.dict["SEQvalue"])
+        total_num += 1
+        #随机丢包
+        '''
+        if random.random()>0.8:
+            #print("Drop packet")
+            continue
+        '''
+        if packet.dict["FIN"] == b'1':#如果收到FIN包，则退出
+            print("receive eof, client over.")
+            s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":RcvBuffer - (LastByteRcvd-LastByteRead)}),serverReceiverAddr)
+            break
+        elif packet.dict["SEQvalue"] == expectedSeqValue:
+            print("Receive packet with correct seq value:",expectedSeqValue)
+            LastByteRcvd = packet.dict["SEQvalue"]
+            d.append(data)
+            total_length += len(packet.dict["Data"])
+            ac_num +=1
+            s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":RcvBuffer - (LastByteRcvd-LastByteRead)}),serverReceiverAddr)
+            print("Receive window now",RcvBuffer - (LastByteRcvd-LastByteRead),LastByteRcvd,LastByteRead)
+            expectedSeqValue += 1
+        else:#收到了不对的包，则返回expectedSeqValue-1，表示在这之前的都收到了
+            print("Expect ",expectedSeqValue," while receive",packet.dict["SEQvalue"]," send ACK ",expectedSeqValue-1,"to receiver ",serverReceiverAddr)
+            s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue-1,"ACK":b'1',"RecvWindow":RcvBuffer - (LastByteRcvd-LastByteRead)}),serverReceiverAddr)
+    #s.sendto(generateBitFromDict({"FIN":b'1'}),('127.0.0.1',9999))#关闭服务器，调试用
+    fileWriterEnd = True
     end_time = time.time()
     total_length/=1024
     total_length/=(end_time-start_time)
