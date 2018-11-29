@@ -16,14 +16,15 @@ if __name__ == '__main__':
     else:
         print("Need 3 arguments: destUrl operation and filename.")
     s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-    s.bind(('127.0.0.1',clientListenPort))
+    s.bind(('',clientListenPort))
     jsonOptions = bytes(json.dumps({'filename':filename,"operation":operation,"ReceiverPort":appPortNum}),encoding='utf-8')
-    rdt_send(s,(destUrl,serverPort),generateBitFromDict({"SEQvalue":1,"optLength":len(jsonOptions),"Options":jsonOptions,"RecvWindow":FileReceivePackNumMax*FileReceivePackMax}),1)
+    #rdt_send(s,(destUrl,serverPort),generateBitFromDict({"SEQvalue":1,"optLength":len(jsonOptions),"Options":jsonOptions,"RecvWindow":FileReceivePackNumMax*FileReceivePackMax}),1)
+    s.sendto(generateBitFromDict({"SEQvalue":1,"optLength":len(jsonOptions),"Options":jsonOptions,"RecvWindow":FileReceivePackNumMax*FileReceivePackMax}),(destUrl,serverPort))
     receiveServerReceiverPort = False
     while not receiveServerReceiverPort:
         data,addr = s.recvfrom(FileReceivePackMax)
         packet = packetHead(data)
-        s.sendto(generateBitFromDict({"ACK":b'1',"ACKvalue":packet.dict["SEQvalue"]}),addr)
+        #s.sendto(generateBitFromDict({"ACK":b'1',"ACKvalue":packet.dict["SEQvalue"]}),addr)
         try:
             jsonOptions = json.loads(packet.dict["Options"].decode("utf-8"))
             if "serverReceiverPort" in jsonOptions:
