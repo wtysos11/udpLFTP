@@ -4,7 +4,7 @@ from rdtPacketTransfer import rdt_send
 from collections import deque
 import config
 #声明全局变量
-config.GBNWindowMax = 30 #GBN窗口大小，意味最多等待100个未确认的包
+config.GBNWindowMax = 50 #GBN窗口大小，意味最多等待100个未确认的包
 config.senderTimeoutValue = 0.5 #下载时发送端等待超时的时间
 config.TransferSenderPacketDataSize = 4000 #从文件中读取的数据的大小，发送包中数据的大小。
 config.blockWindow = 1 #阻塞窗口初始值
@@ -36,7 +36,7 @@ def TransferReceiver(port,q,aimAddr,isClient):
             break
 
         packet = packetHead(data)
-        print("receiver receive ack:",packet.dict["ACKvalue"])
+        #print("receiver receive ack:",packet.dict["ACKvalue"])
         q.put(data)
 
     receiverSocket.close()
@@ -89,7 +89,6 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
         while sendValueable:#如果可以读入数据
 
             data = f.read(TransferSenderPacketDataSize)
-            print("sender read file with data length: ",len(data))
             if data == b'':#文件读入完毕
                 print("File read end.")
                 sendValueable = False
@@ -99,7 +98,6 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
                 GBNtimer = time.time()
             GBNcache[nextseqnum] = generateBitFromDict({"SEQvalue":nextseqnum,"Data":data})
             senderSocket.sendto(GBNcache[nextseqnum],addr)
-            print("Sender send data with seqnum:",nextseqnum)
             nextseqnum += 1
             senderSendPacketNum = nextseqnum - baseSEQ
             if nextseqnum - baseSEQ >=GBNWindowMax or nextseqnum - baseSEQ >= blockWindow:
@@ -129,9 +127,7 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
                 else:
                     ClientBlock = True
                 
-                print("Sender receive ack",ack," with baseSEQ",baseSEQ)
                 if ack >= baseSEQ:
-                    print("update baseSEQ to ",ack+1," with nextseqnum",nextseqnum)
                     baseSEQ = ack+1
                     senderSendPacketNum = nextseqnum-baseSEQ#更新流控制未确定名单
                     receiveACK = True #收到ACK，脱离超时循环
@@ -181,7 +177,7 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
                         packet = packetHead(GBNcache[i])
                         print("Check resend packet SEQ:",packet.dict["SEQvalue"])
                         senderSocket.sendto(GBNcache[i],addr)
-                    blockStatus = 2
+                    blockStatus = 1
                     ssthresh = int(blockWindow)/2
                     if ssthresh<=0:
                         ssthresh = 1
@@ -209,7 +205,7 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
                         packet = packetHead(GBNcache[i])
                         print("Check resend packet SEQ:",packet.dict["SEQvalue"])
                         senderSocket.sendto(GBNcache[i],addr)
-                    blockStatus = 2
+                    blockStatus = 1
                     ssthresh = int(blockWindow)/2
                     blockWindow = 1
                 else:
@@ -274,7 +270,7 @@ def fileWriter(filename,d,q):
                     packet = packetHead(data)
                     LastByteRead = packet.dict["SEQvalue"]
                     f.write(packet.dict["Data"])
-                print("fileWriter")#平均每个包出现三次左右
+                print("fileWriter")
 
 
 def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
@@ -308,7 +304,6 @@ def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
     while True:
         data,addr = s.recvfrom(FileReceivePackMax)
         packet = packetHead(data)
-        print("receive packet with seq",packet.dict["SEQvalue"])
         total_num += 1
         #随机丢包
         '''
@@ -327,7 +322,7 @@ def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
             total_length += len(packet.dict["Data"])
             ac_num +=1
             s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":RcvBuffer - (LastByteRcvd-LastByteRead)}),serverReceiverAddr)
-            print("Receive window now",RcvBuffer - (LastByteRcvd-LastByteRead),LastByteRcvd,LastByteRead)
+            #print("Receive window now",RcvBuffer - (LastByteRcvd-LastByteRead),LastByteRcvd,LastByteRead)
             expectedSeqValue += 1
         else:#收到了不对的包，则返回expectedSeqValue-1，表示在这之前的都收到了
             print("Expect ",expectedSeqValue," while receive",packet.dict["SEQvalue"]," send ACK ",expectedSeqValue-1,"to receiver ",serverReceiverAddr)
