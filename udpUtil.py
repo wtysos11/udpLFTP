@@ -9,7 +9,7 @@ config.senderTimeoutValue = 0.5 #下载时发送端等待超时的时间
 config.TransferSenderPacketDataSize = 1400 #从文件中读取的数据的大小，发送包中数据的大小。考虑到链路层MTU为1500
 config.blockWindow = 1 #阻塞窗口初始值
 config.ssthresh = 10 #拥塞避免阈值
-config.FileReceivePackMax = 4096 #客户端接受数据包的长度最大为1024bytes
+config.FileReceivePackMax = 2048 #客户端接受数据包的长度最大为1024bytes
 config.FileReceivePackNumMax = 1000 #文件接受者最多能够接受500个这样的数据包
 config.RcvBuffer = 1000 #文件接受者最多接受500个这样的数据包
 #经常使用的常量值
@@ -102,7 +102,7 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
             senderSendPacketNum = nextseqnum - baseSEQ
             if nextseqnum - baseSEQ >=GBNWindowMax or nextseqnum - baseSEQ >= blockWindow:
                 sendValueable = False
-                print("Up to limit ",nextseqnum - baseSEQ,GBNWindowMax,blockWindow)
+                #print("Up to limit ",nextseqnum - baseSEQ,GBNWindowMax,blockWindow)
             elif senderSendPacketNum > cacheMax:
                 sendValueable = False
                 ClientBlock = True
@@ -241,7 +241,7 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
 #文件接收方
 FileReceivePackMax = config.FileReceivePackMax
 FileReceivePackNumMax = config.FileReceivePackNumMax
-FileWriteInterval = 1.0#磁盘每1s进行一次写操作
+FileWriteInterval = 0.5#磁盘每1s进行一次写操作
 RcvBuffer = config.RcvBuffer
 fileWriterEnd = False
 LastByteRcvd = 0
