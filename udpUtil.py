@@ -103,7 +103,7 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
             senderSendPacketNum = nextseqnum - baseSEQ
             if nextseqnum - baseSEQ >=GBNWindowMax or nextseqnum - baseSEQ >= blockWindow:
                 sendValueable = False
-                #print("Up to limit ",nextseqnum - baseSEQ,GBNWindowMax,blockWindow)
+                print("抵达界限。未确认包：",nextseqnum - baseSEQ,"GBN窗口大小：",GBNWindowMax,"阻塞窗口大小",blockWindow)
             elif senderSendPacketNum > cacheMax:
                 sendValueable = False
                 ClientBlock = True
@@ -149,7 +149,7 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
                 elif ack == previousACK:
                     counter += 1
                     if counter >=3:#收到三次重复的ACK
-                        print("Three times duplicated ACK",previousACK," ,resend now!")
+                        print("三次重传。收到ACK：",previousACK," ,快速重传!")
                         counter = 0
                         if blockWindow>ssthresh:
                             blockWindow = ssthresh
@@ -166,7 +166,7 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
                 currentTime = time.time()
                 if currentTime - GBNtimer > senderTimeoutValue and not ClientBlock:
                     loss_time += 1
-                    print("Time out and output current sequence number",baseSEQ)
+                    print("超时，当前待确认包：",baseSEQ)
                     GBNtimer = time.time()#更新计时器
                     for i in range(baseSEQ,nextseqnum):
                         packet = packetHead(GBNcache[i])
@@ -188,7 +188,7 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
             except queue.Empty: #超时，发包
                 if not ClientBlock:
                     loss_time += 1
-                    print("Time out and output current sequence number",baseSEQ)
+                    print("超时，当前待确认包：",baseSEQ)
                     GBNtimer = time.time()#更新计时器
                     for i in range(baseSEQ,nextseqnum):
                         packet = packetHead(GBNcache[i])
@@ -200,7 +200,7 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
                         ssthresh = 1
                     blockWindow = 1
                 else:
-                    print("Update flow control value.")
+                    print("发空包，更新recvWindow.")
                     GBNtimer = time.time()
                     senderSocket.sendto(generateBitFromDict({}),addr)
                     senderSendPacketNum = nextseqnum - baseSEQ
