@@ -23,11 +23,13 @@ ssthresh = config.ssthresh
 ### GBN接收方逻辑
 # queue类q用来传递ack的值
 def TransferReceiver(port,q,aimAddr,isClient):
+    print("Transfer Receiver plan to work on port",port)
     receiverSocket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     receiverSocket.bind(('',port))
     if isClient:
+        print("Plan to use rdt_send to send byte to server.")
         rdt_send(receiverSocket,aimAddr,generateBitFromDict({"SEQvalue":0}),0)
-        print("Server receive address and client get ack0 . Can transport now.")
+        print("rdt_send over")
         q.put(0)
     while True:
         data,addr = receiverSocket.recvfrom(1024)
@@ -55,15 +57,14 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
         如果baseSEQ = nextseqnum，则解除置位,sendValuable = True
     '''
     global blockWindow,ssthresh
+    print("TransferSender plan to work on port",port)
     senderSocket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     senderSocket.bind(('',port))
     if isClient:
         ack = q.get(block = True)
-        print("Client get ack from server. Addr transport success.")
     else:
         data,addr = senderSocket.recvfrom(FileReceivePackMax)
         senderSocket.sendto(generateBitFromDict({"ACKvalue":0,"ACK":b'1'}),addr)
-        print("Server receive client receiver addr",addr)
 
     f = open(fileName,"rb")
     #待确认的包的数量nextseqnum - baseSEQ <= GBNWindowMax
@@ -250,8 +251,9 @@ LastByteRead = 0
 def fileWriter(filename,d,q):
     '''使用双端队列作为缓存，如果队列不为空，则取出数据包并输出到磁盘中'''
     global fileWriterEnd,LastByteRead
+    fileWriterEnd = False
     with open(filename,"ab+") as f:
-        while not fileWriterEnd:
+        while not fileWriterEnd or len(d)>0:
             try:
                 da = q.get(timeout = FileWriteInterval)
             except queue.Empty:
@@ -260,7 +262,6 @@ def fileWriter(filename,d,q):
                     packet = packetHead(data)
                     LastByteRead = packet.dict["SEQvalue"]
                     f.write(packet.dict["Data"])
-                #print("fileWriter")
 
 
 def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
@@ -271,16 +272,15 @@ def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
         如果收到的包符合expectedSeqValue，输出，并expectedSeqValue += 1
     返回ACK expectedSeqValue
     '''
+    print("File Receiver plan to work on port",port)
     s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     s.bind(('',port))
     if isClient:
         rdt_send(s,senderSenderAddr,generateBitFromDict({"SEQvalue":0}),0)
-        print("Client file receiver successfully send addr.")
     else:
         data,serverReceiverAddr = s.recvfrom(FileReceivePackMax)
+        print("Receive client receiver addr",serverReceiverAddr)
         s.sendto(generateBitFromDict({"ACKvalue":0,"ACK":b'1'}),serverReceiverAddr)
-        print("Server file receiver successfully receive addr",serverReceiverAddr)
-
     d = deque()
     timeQueue = queue.Queue()#因为磁盘写入速度太快，导致文件写入线程空转。因此每隔一段时间向队列传入数据，使其运行。
     fileThread = threading.Thread(target=fileWriter,args=(filename,d,timeQueue,))
@@ -304,11 +304,12 @@ def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
         '''
         recvWindowSize = RcvBuffer - (LastByteRcvd-LastByteRead)
         if recvWindowSize<0:
-            print("Alert, recvwindowsize less than 0")
+            print("Alert, recvwindowsize less than 0",LastByteRcvd,LastByteRead)
             continue
 
         if packet.dict["FIN"] == b'1':#如果收到FIN包，则退出
-            print("receive eof, client over.")
+            #print("receive eof, client over.")
+            fileWriterEnd = True
             s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":recvWindowSize}),serverReceiverAddr)
             break
         elif packet.dict["SEQvalue"] == expectedSeqValue:
@@ -335,7 +336,6 @@ def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
                 local_cache[packet.dict["SEQvalue"]]=packet
             s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue-1,"ACK":b'1',"RecvWindow":recvWindowSize}),serverReceiverAddr)
     #s.sendto(generateBitFromDict({"FIN":b'1'}),('127.0.0.1',9999))#关闭服务器，调试用
-    fileWriterEnd = True
     end_time = time.time()
     total_length/=1024
     total_length/=(end_time-start_time)

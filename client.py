@@ -36,6 +36,7 @@ if __name__ == '__main__':
                 serverReceiverPort = jsonOptions["serverReceiverPort"]#客户端收到的外网端口是有效的。
                 cacheMax = packet.dict["RecvWindow"]
                 receiveServerReceiverPort = True
+                print("Receive server serving port",serverReceiverPort)
         except:#如果接受到空包的话，loads会抛出异常
             pass
     

@@ -45,6 +45,7 @@ while serverConnected:
         rec_thread = threading.Thread(target = fileReceiver , args = (appPortNum,(addr[0],receiverPort),(addr[0],receiverPort+1),filename,False,))#isClient = False
         rec_thread.start()
         appPortNum += 1
-    print("Thread start")
+    print("Server working Thread start")
 
+print("Server close.")
 s.close()
