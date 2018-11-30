@@ -4,9 +4,9 @@ from rdtPacketTransfer import rdt_send
 from collections import deque
 import config
 #声明全局变量
-config.GBNWindowMax = 30 #GBN窗口大小，意味最多等待100个未确认的包
+config.GBNWindowMax = 100 #GBN窗口大小，意味最多等待100个未确认的包
 config.senderTimeoutValue = 0.5 #下载时发送端等待超时的时间
-config.TransferSenderPacketDataSize = 4000 #从文件中读取的数据的大小，发送包中数据的大小。
+config.TransferSenderPacketDataSize = 1400 #从文件中读取的数据的大小，发送包中数据的大小。考虑到链路层MTU为1500
 config.blockWindow = 1 #阻塞窗口初始值
 config.ssthresh = 10 #拥塞避免阈值
 config.FileReceivePackMax = 4096 #客户端接受数据包的长度最大为1024bytes
@@ -260,7 +260,7 @@ def fileWriter(filename,d,q):
                     packet = packetHead(data)
                     LastByteRead = packet.dict["SEQvalue"]
                     f.write(packet.dict["Data"])
-                print("fileWriter")
+                #print("fileWriter")
 
 
 def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
@@ -302,9 +302,14 @@ def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
             #print("Drop packet")
             continue
         '''
+        recvWindowSize = RcvBuffer - (LastByteRcvd-LastByteRead)
+        if recvWindowSize<0:
+            print("Alert, recvwindowsize less than 0")
+            continue
+
         if packet.dict["FIN"] == b'1':#如果收到FIN包，则退出
             print("receive eof, client over.")
-            s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":RcvBuffer - (LastByteRcvd-LastByteRead)}),serverReceiverAddr)
+            s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":recvWindowSize}),serverReceiverAddr)
             break
         elif packet.dict["SEQvalue"] == expectedSeqValue:
             #print("Receive packet with correct seq value:",expectedSeqValue)
@@ -312,7 +317,7 @@ def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
             d.append(data)
             total_length += len(packet.dict["Data"])
             ac_num +=1
-            s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":RcvBuffer - (LastByteRcvd-LastByteRead)}),serverReceiverAddr)
+            s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":recvWindowSize}),serverReceiverAddr)
             #print("Receive window now",RcvBuffer - (LastByteRcvd-LastByteRead),LastByteRcvd,LastByteRead)
             expectedSeqValue += 1
             while expectedSeqValue in local_cache:
@@ -321,14 +326,14 @@ def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
                 d.append(data)
                 total_length += len(packet.dict["Data"])
                 ac_num +=1
-                s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":RcvBuffer - (LastByteRcvd-LastByteRead)}),serverReceiverAddr)
+                s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":recvWindowSize}),serverReceiverAddr)
                 #print("Receive window now",RcvBuffer - (LastByteRcvd-LastByteRead),LastByteRcvd,LastByteRead)
                 expectedSeqValue += 1
         else:#收到了不对的包，则返回expectedSeqValue-1，表示在这之前的都收到了
             print("Expect ",expectedSeqValue," while receive",packet.dict["SEQvalue"]," send ACK ",expectedSeqValue-1,"to receiver ",serverReceiverAddr)
             if packet.dict["SEQvalue"] > expectedSeqValue and "SEQvalue" not in local_cache:
                 local_cache[packet.dict["SEQvalue"]]=packet
-            s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue-1,"ACK":b'1',"RecvWindow":RcvBuffer - (LastByteRcvd-LastByteRead)}),serverReceiverAddr)
+            s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue-1,"ACK":b'1',"RecvWindow":recvWindowSize}),serverReceiverAddr)
     #s.sendto(generateBitFromDict({"FIN":b'1'}),('127.0.0.1',9999))#关闭服务器，调试用
     fileWriterEnd = True
     end_time = time.time()
