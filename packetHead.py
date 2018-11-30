@@ -38,53 +38,57 @@ def originBin2Hex(bStr):
 
 def generateBitFromDict(mydict):
     '''接受一个字典，返回二进制流'''
-    bitStream = b''
-    if "SEQvalue" in mydict:
-        bitStream += int2Bit(mydict["SEQvalue"],32)
-    else:
-        bitStream += int2Bit(0,32)
+    try:
+        bitStream = b''
+        if "SEQvalue" in mydict:
+            bitStream += int2Bit(mydict["SEQvalue"],32)
+        else:
+            bitStream += int2Bit(0,32)
+        
+        if "ACKvalue" in mydict:
+            bitStream += int2Bit(mydict["ACKvalue"],32)
+        else:
+            bitStream += int2Bit(0,32)
     
-    if "ACKvalue" in mydict:
-        bitStream += int2Bit(mydict["ACKvalue"],32)
-    else:
-        bitStream += int2Bit(0,32)
-
-    if "RecvWindow" in mydict:
-        bitStream += int2Bit(mydict["RecvWindow"],16)
-    else:
-        bitStream += int2Bit(0,16)
+        if "RecvWindow" in mydict:
+            bitStream += int2Bit(mydict["RecvWindow"],16)
+        else:
+            bitStream += int2Bit(0,16)
+        
+        if "FIN" in mydict:
+            bitStream += mydict["FIN"]
+        else:
+            bitStream += b'0'
+        
+        if "SYN" in mydict:
+            bitStream += mydict["SYN"]
+        else:
+            bitStream += b'0'    
+        
+        if "ACK" in mydict:
+            bitStream += mydict["ACK"]
+        else:
+            bitStream += b'0'
     
-    if "FIN" in mydict:
-        bitStream += mydict["FIN"]
-    else:
-        bitStream += b'0'
+        bitStream += b'00000'
+        
     
-    if "SYN" in mydict:
-        bitStream += mydict["SYN"]
-    else:
-        bitStream += b'0'    
+        if "optLength" in mydict:
+            bitStream += int2Bit(mydict["optLength"],8)
+        else:
+            bitStream += int2Bit(0,8)
+        #前面有96个二进制字符，24个16进制字符
+        bitStream = originBin2Hex(bitStream)
     
-    if "ACK" in mydict:
-        bitStream += mydict["ACK"]
-    else:
-        bitStream += b'0'
-
-    bitStream += b'00000'
+        if "Options" in mydict:
+            bitStream += mydict["Options"]
+        
+        if "Data" in mydict:
+            bitStream += mydict["Data"]
+    except ValueError:
+        print("Value error occur")
+        print(mydict)
     
-
-    if "optLength" in mydict:
-        bitStream += int2Bit(mydict["optLength"],8)
-    else:
-        bitStream += int2Bit(0,8)
-    #前面有96个二进制字符，24个16进制字符
-    bitStream = originBin2Hex(bitStream)
-
-    if "Options" in mydict:
-        bitStream += mydict["Options"]
-    
-    if "Data" in mydict:
-        bitStream += mydict["Data"]
-
     return bitStream
 
 class packetHead:

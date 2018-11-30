@@ -4,7 +4,7 @@ from rdtPacketTransfer import rdt_send
 from collections import deque
 import config
 #声明全局变量
-config.GBNWindowMax = 50 #GBN窗口大小，意味最多等待100个未确认的包
+config.GBNWindowMax = 30 #GBN窗口大小，意味最多等待100个未确认的包
 config.senderTimeoutValue = 0.5 #下载时发送端等待超时的时间
 config.TransferSenderPacketDataSize = 4000 #从文件中读取的数据的大小，发送包中数据的大小。
 config.blockWindow = 1 #阻塞窗口初始值
@@ -78,7 +78,7 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
     blockStatus = 1#1意味着处于指数增长；2意味着线性增长
     senderSendPacketNum = 0 #记录当前已经发送的数据量，这个量不能超过对面缓存区的大小
 
-    
+    loss_time = 0
     #拥塞控制相关：
     # 正常情况下，发送端收到ACK后双倍发送（拥塞窗口倍增）
     # 如果超时，拥塞窗口变为1，并开始线性增长。更新ssthresh = 当前拥塞窗口的一半
@@ -164,21 +164,15 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
 
                 currentTime = time.time()
                 if currentTime - GBNtimer > senderTimeoutValue and not ClientBlock:
+                    loss_time += 1
                     print("Time out and output current sequence number",baseSEQ)
                     GBNtimer = time.time()#更新计时器
-                    baseRepeat = baseSEQ
-                    ForceTime += 1
-                    if ForceTime > 3:
-                        ForceTime = 0
-                        baseRepeat -= 10
-                        if baseRepeat<0:
-                            baseRepeat = 0
-                    for i in range(baseRepeat,nextseqnum):
+                    for i in range(baseSEQ,nextseqnum):
                         packet = packetHead(GBNcache[i])
-                        print("Check resend packet SEQ:",packet.dict["SEQvalue"])
+                        #print("Check resend packet SEQ:",packet.dict["SEQvalue"])
                         senderSocket.sendto(GBNcache[i],addr)
                     blockStatus = 1
-                    ssthresh = int(blockWindow)/2
+                    ssthresh = int(blockWindow/2)
                     if ssthresh<=0:
                         ssthresh = 1
                     blockWindow = 1
@@ -192,21 +186,17 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
                         ClientBlock = True
             except queue.Empty: #超时，发包
                 if not ClientBlock:
-                    baseRepeat = baseSEQ
+                    loss_time += 1
                     print("Time out and output current sequence number",baseSEQ)
-                    ForceTime += 1
-                    if ForceTime > 3:
-                        ForceTime = 0
-                        baseRepeat -= 10
-                        if baseRepeat<0:
-                            baseRepeat = 0
                     GBNtimer = time.time()#更新计时器
-                    for i in range(baseRepeat,nextseqnum):
+                    for i in range(baseSEQ,nextseqnum):
                         packet = packetHead(GBNcache[i])
-                        print("Check resend packet SEQ:",packet.dict["SEQvalue"])
+                        #print("Check resend packet SEQ:",packet.dict["SEQvalue"])
                         senderSocket.sendto(GBNcache[i],addr)
                     blockStatus = 1
-                    ssthresh = int(blockWindow)/2
+                    ssthresh = int(blockWindow/2)
+                    if ssthresh<=0:
+                        ssthresh = 1
                     blockWindow = 1
                 else:
                     print("Update flow control value.")
@@ -245,7 +235,7 @@ def TransferSender(port,q,fileName,addr,cacheMax,isClient):
     senderSocket.sendto(generateBitFromDict({"optLength":3,"Options":b"end","FIN":b'1'}),('127.0.0.1',port-1))
     senderSocket.close()
     f.close()
-    print("sender closes")
+    print("sender closes,丢包率计算",loss_time/(nextseqnum-1))
 
 
 #文件接收方
@@ -301,6 +291,7 @@ def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
     total_length = 0
     total_num = 0
     ac_num = 0
+    local_cache = {}
     while True:
         data,addr = s.recvfrom(FileReceivePackMax)
         packet = packetHead(data)
@@ -316,7 +307,7 @@ def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
             s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":RcvBuffer - (LastByteRcvd-LastByteRead)}),serverReceiverAddr)
             break
         elif packet.dict["SEQvalue"] == expectedSeqValue:
-            print("Receive packet with correct seq value:",expectedSeqValue)
+            #print("Receive packet with correct seq value:",expectedSeqValue)
             LastByteRcvd = packet.dict["SEQvalue"]
             d.append(data)
             total_length += len(packet.dict["Data"])
@@ -324,8 +315,19 @@ def fileReceiver(port,serverReceiverAddr,senderSenderAddr,filename,isClient):
             s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":RcvBuffer - (LastByteRcvd-LastByteRead)}),serverReceiverAddr)
             #print("Receive window now",RcvBuffer - (LastByteRcvd-LastByteRead),LastByteRcvd,LastByteRead)
             expectedSeqValue += 1
+            while expectedSeqValue in local_cache:
+                packet = local_cache[expectedSeqValue]
+                LastByteRcvd = packet.dict["SEQvalue"]
+                d.append(data)
+                total_length += len(packet.dict["Data"])
+                ac_num +=1
+                s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue,"ACK":b'1',"RecvWindow":RcvBuffer - (LastByteRcvd-LastByteRead)}),serverReceiverAddr)
+                #print("Receive window now",RcvBuffer - (LastByteRcvd-LastByteRead),LastByteRcvd,LastByteRead)
+                expectedSeqValue += 1
         else:#收到了不对的包，则返回expectedSeqValue-1，表示在这之前的都收到了
             print("Expect ",expectedSeqValue," while receive",packet.dict["SEQvalue"]," send ACK ",expectedSeqValue-1,"to receiver ",serverReceiverAddr)
+            if packet.dict["SEQvalue"] > expectedSeqValue and "SEQvalue" not in local_cache:
+                local_cache[packet.dict["SEQvalue"]]=packet
             s.sendto(generateBitFromDict({"ACKvalue":expectedSeqValue-1,"ACK":b'1',"RecvWindow":RcvBuffer - (LastByteRcvd-LastByteRead)}),serverReceiverAddr)
     #s.sendto(generateBitFromDict({"FIN":b'1'}),('127.0.0.1',9999))#关闭服务器，调试用
     fileWriterEnd = True
