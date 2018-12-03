@@ -33,15 +33,15 @@ while serverConnected:
     backJson = bytes(json.dumps({"serverReceiverPort":appPortNum}),encoding = 'utf-8')
     rdt_send(s,addr,generateBitFromDict({"SEQvalue":2,"optLength":len(backJson),"Options":backJson,"RecvWindow":FileReceivePackNumMax}),2)
     s.sendto(generateBitFromDict({"SEQvalue":2,"optLength":len(backJson),"Options":backJson,"RecvWindow":FileReceivePackNumMax}),addr)
-    if operation == "download":
+    if operation == "lget":
         transferQueue = queue.Queue()
         rec_thread = threading.Thread(target = TransferReceiver,args = (appPortNum,transferQueue,(addr[0],receiverPort),False,))#isClient = False
         send_thread = threading.Thread(target = TransferSender,args = (appPortNum+1,transferQueue,filename,(addr[0],receiverPort),cacheMax,False,))
         appPortNum += 2
         rec_thread.start()
         send_thread.start()
-    elif operation == "upload":
-        print("Receive upload backup port:",receiverPort)    
+    elif operation == "lsend":
+        print("Receive lsend backup port:",receiverPort)    
         rec_thread = threading.Thread(target = fileReceiver , args = (appPortNum,(addr[0],receiverPort),(addr[0],receiverPort+1),filename,False,))#isClient = False
         rec_thread.start()
         appPortNum += 1

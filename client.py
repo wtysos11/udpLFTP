@@ -7,17 +7,19 @@ FileReceivePackMax = config.FileReceivePackMax
 FileReceivePackNumMax = config.FileReceivePackNumMax
 filename = "test.txt"
 destUrl = '127.0.0.1'
-operation = "download"
+operation = "lget"
 serverPort = 9999 #服务器工作的主端口
 clientListenPort = 9990
 appPortNum = 8000
 if __name__ == '__main__':
     if len(sys.argv)>=4:
-        destUrl = sys.argv[1]
-        operation = sys.argv[2]
+        operation = sys.argv[1]
+        destUrl = sys.argv[2]
         filename = sys.argv[3]
+        print("operation:",operation,"destUrl:",destUrl,"filename:",filename)
+
     else:
-        print("Need 3 arguments: destUrl operation and filename.")
+        print("Need 3 arguments:  lget/lsend ServerAddress and filename.")
 
     s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     s.bind(('',clientListenPort))
@@ -40,11 +42,11 @@ if __name__ == '__main__':
         except:#如果接受到空包的话，loads会抛出异常
             pass
     
-    if operation == "download":
+    if operation == "lget":
         receiver_thread = threading.Thread(target = fileReceiver,args = (appPortNum,(destUrl,serverReceiverPort),(destUrl,serverReceiverPort+1),filename,True,))#isClient = True
         receiver_thread.start()
         receiver_thread.join()
-    elif operation == "upload":
+    elif operation == "lsend":
         transferQueue = queue.Queue()
         rec_thread = threading.Thread(target = TransferReceiver,args = (appPortNum,transferQueue,(destUrl,serverReceiverPort),True,))#isClient = True
         send_thread = threading.Thread(target = TransferSender,args = (appPortNum+1,transferQueue,filename,(destUrl,serverReceiverPort),cacheMax,True,))
